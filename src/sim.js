@@ -107,7 +107,9 @@ function resolveTick(bots, acts, hp, energy, hitStreak, rand, events) {
       hp[j] = Math.max(0, hp[j] - dmg);
       hitStreak[j]++; hitStreak[i] = 0;
       energy[i] += 15; energy[j] += 10;
-      events.push({ t: events.length, type: crit ? "crit" : type, actor: i, dmg, hp: [...hp] });
+      const ev = { t: events.length, type: crit ? "crit" : type, actor: i, dmg, hp: [...hp] };
+      if (type === "special" && bots[i].moveName) ev.label = bots[i].moveName; // 필살기 이름 컷인용
+      events.push(ev);
       if (hp[j] <= 0) return;
     }
   }
