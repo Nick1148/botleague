@@ -1,42 +1,58 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>봇 실험실 — 귀여움 관문</title>
-<style>body{background:#FFF6E9;margin:0;font-family:sans-serif}canvas{display:block;margin:0 auto;max-width:100%}</style>
+<title>봇 실험실 — 귀여움 관문 v2</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>body{background:#FFF6E9;margin:0;font-family:Pretendard,sans-serif}canvas{display:block;margin:0 auto;max-width:100%}</style>
 </head>
 <body>
-<canvas id="lab" width="1080" height="1600"></canvas>
+<canvas id="lab" width="1080" height="2150"></canvas>
 <script type="module">
 import { createBot } from "./src/bot.js";
 import { drawBot } from "./src/renderer.js";
+import { allNpcs } from "./src/npc.js";
 
-const PERSONAS = [
-  "겁이 많지만 돈이 걸리면 목숨을 건다", "화나면 아무것도 안 보인다",
-  "이기는 것보다 멋있는 게 중요하다", "싸움 전에 꼭 낮잠을 잔다",
-  "칭찬받으면 강해진다", "정정당당이 목숨보다 중요하다",
-  "몰래 뒤에서 치는 게 특기다", "끝까지 포기 안 하는 잡초",
-  "계산이 서기 전엔 안 움직인다", "바나나를 사랑함",
-  "조용히 이기고 조용히 떠난다", "일단 부딪히고 생각한다",
-];
-const NAMES = ["뭉치","두부킹","젤리","코어","펀치","시무룩","반짝이","불도저","여우","바나나","그림자","돌진맨"];
-const STATES = ["idle","battle","win","lose","interview"];
+// 상단: NPC 24마리 (성격→외형·배색 다양성 관문)
+// 중단: 표정 5종 상태머신
+// 하단: 같은 봇의 매치업 프리뷰 (전투 자세)
+const STATES = ["idle", "battle", "win", "lose", "interview"];
 const ctx = document.getElementById("lab").getContext("2d");
+const bots = allNpcs().slice(0, 24);
 
 function frame(t) {
-  ctx.clearRect(0, 0, 1080, 1600);
-  // 상단: 봇 12마리 그리드 (성격 다양성 확인)
-  for (let i = 0; i < 12; i++) {
-    const bot = createBot(NAMES[i], PERSONAS[i]);
-    drawBot(ctx, bot, { x: 135 + (i % 4) * 270, y: 160 + Math.floor(i / 4) * 300, size: 180, state: "idle", t: t + i * 200 });
-    ctx.fillStyle = "#2B2622"; ctx.font = "bold 24px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText(bot.name, 135 + (i % 4) * 270, 300 + Math.floor(i / 4) * 300);
-  }
-  // 하단: 표정 5종 (상태머신 확인)
-  const demo = createBot("뭉치", PERSONAS[0]);
-  STATES.forEach((s, i) => {
-    drawBot(ctx, demo, { x: 110 + i * 215, y: 1250, size: 160, state: s, t });
-    ctx.fillText(s, 110 + i * 215, 1380);
+  ctx.clearRect(0, 0, 1080, 2150);
+  ctx.fillStyle = "#33302B";
+  ctx.font = "bold 34px Pretendard, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("① 다양성 관문 — 24마리가 다 달라 보이는가", 40, 60);
+
+  bots.forEach((bot, i) => {
+    const x = 135 + (i % 4) * 270;
+    const y = 200 + Math.floor(i / 4) * 250;
+    drawBot(ctx, bot, { x, y, size: 150, state: "idle", t: t + i * 230 });
+    ctx.fillStyle = "#33302B"; ctx.font = "bold 22px Pretendard, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(bot.name, x, y + 115);
   });
+
+  ctx.textAlign = "left";
+  ctx.font = "bold 34px Pretendard, sans-serif";
+  ctx.fillText("② 표정 상태머신", 40, 1720);
+  const demo = createBot("뭉치", "겁이 많지만 돈이 걸리면 목숨을 건다");
+  STATES.forEach((s, i) => {
+    const x = 110 + i * 215;
+    drawBot(ctx, demo, { x, y: 1830, size: 150, state: s, t });
+    ctx.fillStyle = "#33302B"; ctx.font = "20px Pretendard, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(s, x, 1945);
+  });
+
+  ctx.textAlign = "left";
+  ctx.font = "bold 34px Pretendard, sans-serif";
+  ctx.fillText("③ 대전 프리뷰", 40, 2010);
+  const a = createBot("돌진맨", "일단 부딪히고 생각한다");
+  const b = createBot("여우코어", "몰래 뒤에서 치는 게 특기다");
+  drawBot(ctx, a, { x: 380, y: 2090, size: 130, state: "battle", t });
+  drawBot(ctx, b, { x: 700, y: 2090, size: 130, state: "battle", t, flip: true });
+
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
