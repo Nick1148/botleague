@@ -18,3 +18,16 @@ body { font-family: Pretendard, -apple-system, "Malgun Gothic", sans-serif; colo
   padding: 14px 20px; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
 .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
 .btn-primary { background: var(--coral); color: #fff; }
+.create-inner { display: flex; flex-direction: column; gap: 14px; padding: 28px 22px; overflow-y: auto; }
+.eyebrow { font-weight: 700; color: var(--coral); letter-spacing: 0.05em; }
+h1 { font-size: 34px; line-height: 1.2; }
+label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 14px; }
+input { border: var(--outline) solid var(--ink); border-radius: 14px; padding: 12px 14px; font-size: 16px; width: 100%; }
+.persona-row { display: flex; gap: 8px; } .persona-row input { flex: 1; }
+#birth { text-align: center; } #birth-canvas { max-width: 70%; }
+#birth-desc { font-weight: 700; margin: 8px 0 14px; }
+.skip { position: absolute; right: 14px; bottom: 18px; opacity: 0.9; }
+.card-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 0; }
+#card-canvas { max-height: 100%; max-width: 88%; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+.interview-actions { display: flex; gap: 10px; padding: 14px 18px calc(18px + env(safe-area-inset-bottom)); }
+.interview-actions .btn { flex: 1; font-size: 15px; padding: 12px 8px; }
