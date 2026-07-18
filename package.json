@@ -1,0 +1,13 @@
+{
+  "name": "botleague",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "start": "npx -y http-server -p 8123 -c-1 ."
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

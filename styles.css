@@ -1,0 +1,20 @@
+:root {
+  --cream-bg: #FFF6E9; --card: #FFFFFF; --ink: #2B2622;
+  --coral: #FF6B57; --mint: #4ED9B5; --sun: #FFC93C; --lav: #A78BFA;
+  --stadium-bg: #171522; --ring: #232033;
+  --neon-cyan: #4DE3FF; --neon-pink: #FF4D9D;
+  --radius: 20px; --outline: 3px;
+}
+* { margin: 0; box-sizing: border-box; }
+body { font-family: Pretendard, -apple-system, "Malgun Gothic", sans-serif; color: var(--ink); background: #EDE6DA; }
+/* 세로 9:16 스테이지 — 데스크톱에선 중앙 세로 캔버스 (§19.1-①) */
+#stage { position: relative; margin: 0 auto; width: min(100vw, 56.25vh); height: 100vh; height: 100dvh; overflow: hidden; }
+.screen { position: absolute; inset: 0; display: none; flex-direction: column; }
+.screen.active { display: flex; }
+.zone-cream { background: var(--cream-bg); }
+.zone-dark { background: var(--stadium-bg); }
+#battle-canvas { width: 100%; height: 100%; display: block; }
+.btn { border: var(--outline) solid var(--ink); border-radius: var(--radius); background: var(--card);
+  padding: 14px 20px; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.btn-primary { background: var(--coral); color: #fff; }
