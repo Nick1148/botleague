@@ -1,13 +1,21 @@
 import { drawBot } from "./renderer.js";
-import { STYLE_COLORS } from "./parts.js";
+import { botPalette } from "./parts.js";
 
 // 9:16 인터뷰 카드 — 화면이자 저장 이미지 그 자체 (§19.4-④, §11.1)
 export function renderCard(bot, { won, line, opponentName }) {
+  const pal = botPalette(bot);
   const canvas = document.createElement("canvas");
   canvas.width = 1080; canvas.height = 1920;
   const ctx = canvas.getContext("2d");
 
   ctx.fillStyle = "#FFF6E9"; ctx.fillRect(0, 0, 1080, 1920);
+  // 은은한 도트 패턴 (§19.2)
+  ctx.fillStyle = "rgba(43,38,34,0.05)";
+  for (let py = 40; py < 1920; py += 44) {
+    for (let px = 20 + (py % 88 ? 22 : 0); px < 1080; px += 44) {
+      ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
   // 상단 리본
   ctx.fillStyle = won ? "#FF6B57" : "#A78BFA";
   ctx.fillRect(0, 0, 1080, 140);
@@ -28,14 +36,14 @@ export function renderCard(bot, { won, line, opponentName }) {
   ctx.font = "500 40px Pretendard, sans-serif"; ctx.fillStyle = "rgba(43,38,34,0.6)";
   ctx.fillText(`vs ${opponentName} · ${won ? "WIN" : "LOSE"}`, 540, 1185);
 
-  // 인터뷰 대사 (큰따옴표 카드)
-  ctx.fillStyle = "#FFFFFF"; ctx.strokeStyle = "#2B2622"; ctx.lineWidth = 6;
+  // 인터뷰 대사 (큰따옴표 카드 — 손글씨 폰트 §19.7-⑥)
+  ctx.fillStyle = "#FFFFFF"; ctx.strokeStyle = "#33302B"; ctx.lineWidth = 6;
   roundRect(ctx, 90, 1270, 900, 420, 40); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = STYLE_COLORS[bot.parts.style].accent;
+  ctx.fillStyle = pal.accent;
   ctx.font = "bold 130px Georgia, serif"; ctx.textAlign = "left";
   ctx.fillText("“", 130, 1400);
-  ctx.fillStyle = "#2B2622"; ctx.font = "bold 52px Pretendard, sans-serif";
-  wrap(ctx, line, 540, 1440, 800, 74, "center");
+  ctx.fillStyle = "#33302B"; ctx.font = '68px "Nanum Pen Script", Pretendard, sans-serif';
+  wrap(ctx, line, 540, 1445, 800, 82, "center");
 
   // 워터마크 (§11.1)
   ctx.fillStyle = "rgba(43,38,34,0.45)"; ctx.font = "bold 36px Pretendard, sans-serif"; ctx.textAlign = "center";

@@ -61,10 +61,12 @@ function startBattle() {
 $("#btn-skip").addEventListener("click", () => currentBattle?.skip());
 
 // --- 인터뷰 ---
-function showInterview(npc, result) {
+async function showInterview(npc, result) {
   const won = result.winnerIndex === 0;
   myBot.record[won ? "w" : "l"]++;
   const line = pickInterview(myBot, { won, comeback: result.comeback }, `m${matchNo}`);
+  // 손글씨 폰트가 로드된 뒤 카드를 그린다 (실패해도 폴백 폰트로 진행)
+  try { await document.fonts.load('68px "Nanum Pen Script"'); } catch { /* 오프라인 폴백 */ }
   const card = renderCard(myBot, { won, line, opponentName: npc.name });
   const view = $("#card-canvas");
   view.width = card.width; view.height = card.height;
