@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>봇 실험실 — 귀여움 관문</title>
+<style>body{background:#FFF6E9;margin:0;font-family:sans-serif}canvas{display:block;margin:0 auto;max-width:100%}</style>
+</head>
+<body>
+<canvas id="lab" width="1080" height="1600"></canvas>
+<script type="module">
+import { createBot } from "./src/bot.js";
+import { drawBot } from "./src/renderer.js";
+
+const PERSONAS = [
+  "겁이 많지만 돈이 걸리면 목숨을 건다", "화나면 아무것도 안 보인다",
+  "이기는 것보다 멋있는 게 중요하다", "싸움 전에 꼭 낮잠을 잔다",
+  "칭찬받으면 강해진다", "정정당당이 목숨보다 중요하다",
+  "몰래 뒤에서 치는 게 특기다", "끝까지 포기 안 하는 잡초",
+  "계산이 서기 전엔 안 움직인다", "바나나를 사랑함",
+  "조용히 이기고 조용히 떠난다", "일단 부딪히고 생각한다",
+];
+const NAMES = ["뭉치","두부킹","젤리","코어","펀치","시무룩","반짝이","불도저","여우","바나나","그림자","돌진맨"];
+const STATES = ["idle","battle","win","lose","interview"];
+const ctx = document.getElementById("lab").getContext("2d");
+
+function frame(t) {
+  ctx.clearRect(0, 0, 1080, 1600);
+  // 상단: 봇 12마리 그리드 (성격 다양성 확인)
+  for (let i = 0; i < 12; i++) {
+    const bot = createBot(NAMES[i], PERSONAS[i]);
+    drawBot(ctx, bot, { x: 135 + (i % 4) * 270, y: 160 + Math.floor(i / 4) * 300, size: 180, state: "idle", t: t + i * 200 });
+    ctx.fillStyle = "#2B2622"; ctx.font = "bold 24px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(bot.name, 135 + (i % 4) * 270, 300 + Math.floor(i / 4) * 300);
+  }
+  // 하단: 표정 5종 (상태머신 확인)
+  const demo = createBot("뭉치", PERSONAS[0]);
+  STATES.forEach((s, i) => {
+    drawBot(ctx, demo, { x: 110 + i * 215, y: 1250, size: 160, state: s, t });
+    ctx.fillText(s, 110 + i * 215, 1380);
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
