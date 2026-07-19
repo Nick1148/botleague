@@ -38,3 +38,55 @@ input { border: var(--outline) solid var(--ink); border-radius: 14px; padding: 1
 #card-canvas { max-height: 100%; max-width: 88%; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
 .interview-actions { display: flex; gap: 10px; padding: 14px 18px calc(18px + env(safe-area-inset-bottom)); }
 .interview-actions .btn { flex: 1; font-size: 15px; padding: 12px 8px; }
+.promo { text-align: center; font-weight: 800; padding: 10px 0 0; font-size: 17px; }
+
+/* ---- 탭바 (§19.4) ---- */
+#tabbar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 6px;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--card);
+  border-top: var(--outline) solid var(--ink); }
+#tabbar .tab { flex: 1; border: none; background: none; font-weight: 800; font-size: 14px;
+  padding: 8px 4px; border-radius: 12px; color: rgba(43,38,34,0.5); cursor: pointer; }
+#tabbar .tab.active { background: var(--cream-bg); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.with-tabs { padding-bottom: 68px; }
+
+/* ---- 홈 (§19.4-①: 봇이 주인공) ---- */
+#screen-home { padding: 14px 18px; gap: 8px; overflow-y: auto; }
+.home-top { display: flex; justify-content: space-between; font-weight: 800; font-size: 14px; }
+#home-tier { color: var(--coral); }
+.home-bot { position: relative; text-align: center; }
+#home-canvas { max-width: 78%; }
+.bubble { position: absolute; top: 4px; right: 2px; max-width: 45%; background: var(--card);
+  border: var(--outline) solid var(--ink); border-radius: 14px; padding: 8px 10px;
+  font-family: "Nanum Pen Script", Pretendard, sans-serif; font-size: 17px; line-height: 1.25; text-align: left; }
+.bubble::after { content: ""; position: absolute; left: -10px; bottom: 12px; border: 6px solid transparent;
+  border-right-color: var(--ink); }
+.harvest { background: var(--sun); }
+.train-row { display: flex; gap: 6px; }
+.train-chip { flex: 1; border: 2px solid var(--ink); border-radius: 12px; background: var(--card);
+  font-weight: 700; font-size: 13px; padding: 8px 2px; cursor: pointer; opacity: 0.55; }
+.train-chip.active { opacity: 1; background: var(--mint); }
+.stats { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+.stat-row { display: grid; grid-template-columns: 44px 1fr 34px; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.stat-bar { height: 12px; background: rgba(43,38,34,0.08); border-radius: 6px; overflow: hidden; }
+.stat-bar > i { display: block; height: 100%; border-radius: 6px; background: var(--coral); }
+
+/* ---- 리그 사다리 (§19.4-⑤) ---- */
+#screen-league, #screen-history { padding: 18px; gap: 10px; overflow-y: auto; }
+.tab-title { font-size: 24px; }
+.ladder-row { display: flex; align-items: center; gap: 10px; border: var(--outline) solid var(--ink);
+  border-radius: 14px; background: var(--card); padding: 12px 14px; margin-bottom: 8px; opacity: 0.55; }
+.ladder-row.mine { opacity: 1; box-shadow: 0 3px 0 var(--ink); }
+.ladder-row .t-name { font-weight: 800; flex: 1; }
+.ladder-progress { flex: 2; height: 10px; background: rgba(43,38,34,0.08); border-radius: 5px; overflow: hidden; }
+.ladder-progress > i { display: block; height: 100%; background: var(--coral); }
+.ladder-note { font-size: 12px; font-weight: 700; color: rgba(43,38,34,0.6); }
+
+/* ---- 기록 (§19.4-⑥) ---- */
+#history-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.hist-item { display: flex; align-items: center; gap: 10px; border: 2px solid var(--ink); border-radius: 12px;
+  background: var(--card); padding: 10px 12px; font-size: 14px; font-weight: 700; }
+.hist-item .res-w { color: var(--coral); } .hist-item .res-l { color: var(--lav); }
+.hist-item .who { flex: 1; }
+.hist-item .btn-replay { border: 2px solid var(--ink); border-radius: 10px; background: var(--cream-bg);
+  font-weight: 700; font-size: 12px; padding: 6px 10px; cursor: pointer; }
+.muted { color: rgba(43,38,34,0.5); font-weight: 600; }

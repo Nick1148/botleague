@@ -31,18 +31,44 @@
       </div>
     </div>
   </section>
+  <section id="screen-home" class="screen zone-cream with-tabs">
+    <div class="home-top"><span id="home-tier">두부 리그</span><span id="home-record">0승 0패</span></div>
+    <div class="home-bot">
+      <canvas id="home-canvas" width="360" height="320"></canvas>
+      <div id="home-bubble" class="bubble">…</div>
+    </div>
+    <button id="btn-harvest" class="btn harvest" hidden>🏋️ 훈련 수확 +0</button>
+    <div class="train-row" id="train-row"></div>
+    <div class="stats" id="home-stats"></div>
+    <button id="btn-fight" class="btn btn-primary">▶ 리그 출전 (5/5)</button>
+  </section>
+  <section id="screen-league" class="screen zone-cream with-tabs">
+    <h2 class="tab-title">리그</h2>
+    <div id="ladder"></div>
+  </section>
+  <section id="screen-history" class="screen zone-cream with-tabs">
+    <h2 class="tab-title">기록</h2>
+    <ul id="history-list"></ul>
+    <p id="history-empty" class="muted">아직 경기 기록이 없어. 리그에 출전해보자!</p>
+  </section>
   <section id="screen-battle" class="screen zone-dark">
     <canvas id="battle-canvas"></canvas>
     <button id="btn-skip" class="btn skip">스킵 ≫</button>
   </section>
   <section id="screen-interview" class="screen zone-cream">
+    <p id="promo-note" class="promo" hidden></p>
     <div class="card-wrap"><canvas id="card-canvas"></canvas></div>
     <div class="interview-actions">
       <button id="btn-save" class="btn btn-primary">📸 짤 저장</button>
       <button id="btn-again" class="btn">한 판 더</button>
-      <button id="btn-new" class="btn">새 봇 만들기</button>
+      <button id="btn-home" class="btn">홈으로</button>
     </div>
   </section>
+  <nav id="tabbar" hidden>
+    <button class="tab active" data-tab="home">🏠 홈</button>
+    <button class="tab" data-tab="league">🏆 리그</button>
+    <button class="tab" data-tab="history">📼 기록</button>
+  </nav>
 </main>
 <script type="module" src="src/main.js"></script>
 </body>
