@@ -24,15 +24,16 @@ export function defaultProgress() {
   };
 }
 
-// 원시 저장값 → 상태 (v1 마이그레이션 포함). 순수 함수.
-export function migrate({ v1Bot, v2 }) {
+// 원시 저장값 → 상태 (v1 마이그레이션 포함). uuidFn 주입 가능(테스트용).
+export function migrate({ v1Bot, v2 }, uuidFn = () => crypto.randomUUID()) {
+  let s = null;
   if (v2 && v2.bot) {
-    return { bot: v2.bot, progress: { ...defaultProgress(), ...(v2.progress ?? {}) } };
+    s = { bot: v2.bot, progress: { ...defaultProgress(), ...(v2.progress ?? {}) }, net: v2.net };
+  } else if (v1Bot && v1Bot.name) {
+    s = { bot: { name: v1Bot.name, persona: v1Bot.persona }, progress: defaultProgress() };
   }
-  if (v1Bot && v1Bot.name) {
-    return { bot: { name: v1Bot.name, persona: v1Bot.persona }, progress: defaultProgress() };
-  }
-  return null;
+  if (s && !s.net) s.net = { deviceId: uuidFn(), ownerSecret: uuidFn() }; // 온라인 신원 (§14 MVP 신뢰 모델)
+  return s;
 }
 
 // 베이스 봇(결정론) + 훈련 보너스 + 미러 성향 머지 (§8, §8.4) — 전투·카드에 쓰는 실전 봇
