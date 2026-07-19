@@ -6,9 +6,10 @@ import { pickInterview } from "./dialogue.js";
 import { renderCard, saveCard } from "./interviewCard.js";
 import { randomNpc } from "./npc.js";
 import { hashString, mulberry32 } from "./rng.js";
-import { accrueTraining } from "./training.js";
+import { accrueTraining, TRAIN_CAP } from "./training.js";
 import { TIERS, refreshTickets, applyResult, pickOpponent } from "./league.js";
 import { loadState, saveState, defaultProgress, buildMyBot, pushHistory, STAT_CAP } from "./state.js";
+import { applyBehavior, touchStreak, dominantMirror, effectiveAxes } from "./mirror.js";
 import { dominantStyle } from "./parts.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -29,6 +30,26 @@ let state = null;      // { bot:{name,persona}, progress }
 let currentBattle = null;
 let pendingTrain = 0;
 let homeLoop = null;
+let wasSkipped = false;
+let replaying = false;
+
+// 미러 상태 말풍선 (§8.4 — 봇이 주인의 습관을 언급한다)
+const MIRROR_BUBBLES = {
+  "calm-1": "주인이 맨날 스킵하니까 나도 성격이 급해지고 있다.",
+  "calm1": "주인 따라 차분해지는 중이다. 나쁘지 않다.",
+  "brave1": "주인이 겁없이 내보내더라. 나도 닮아간다.",
+  "grit1": "주인이 매일 오니까 나도 끈질겨졌다.",
+  "grit-1": "주인이 효율파라서 나도 계산적으로 변하는 중이다.",
+  "brave-1": "요즘 좀 신중해졌다. 주인 영향이다.",
+};
+const MIRROR_NOTE = {
+  "calm-1": "성향 변화: 다혈질 ↑ (주인의 스킵 습관)",
+  "calm1": "성향 변화: 침착 ↑ (경기를 끝까지 보는 주인)",
+  "brave1": "성향 변화: 저돌 ↑ (겁없는 출전)",
+  "grit1": "성향 변화: 근성 ↑ (꾸준한 출석)",
+  "grit-1": "성향 변화: 효율 ↑ (몰아서 수확하는 주인)",
+  "brave-1": "성향 변화: 신중 ↑",
+};
 
 const todayStr = () => new Date().toLocaleDateString("sv"); // YYYY-MM-DD (로컬)
 
@@ -52,6 +73,7 @@ document.querySelectorAll("#tabbar .tab").forEach((b) => b.addEventListener("cli
 function enterHome() {
   const p = state.progress;
   refreshTickets(p, todayStr());
+  touchStreak(p.mirror, todayStr()); // 연속 출석 → 근성 드리프트 (§8.4)
   pendingTrain = accrueTraining(p.lastSeen || Date.now(), Date.now());
   saveState(state);
 
@@ -59,9 +81,16 @@ function enterHome() {
   $("#home-tier").textContent = `${TIERS[p.tier]} · ${p.points}점`;
   $("#home-record").textContent = `${p.record.w}승 ${p.record.l}패`;
 
-  // 말풍선 (성격 톤)
-  const pool = BUBBLES[dominantStyle(bot.axes)];
-  $("#home-bubble").textContent = pool[Math.floor(Date.now() / 6000) % pool.length];
+  // 말풍선 (성격 톤 + 미러 상태 대사 로테이션)
+  const pool = [...BUBBLES[dominantStyle(bot.axes)]];
+  const dm = dominantMirror(p.mirror.axes);
+  if (dm) pool.push(MIRROR_BUBBLES[dm.axis + dm.dir] ?? "");
+  $("#home-bubble").textContent = pool[Math.floor(Date.now() / 6000) % pool.length] || pool[0];
+
+  // 성향 변화 1줄
+  const note = $("#mirror-note");
+  note.hidden = !dm;
+  if (dm) note.textContent = MIRROR_NOTE[dm.axis + dm.dir] ?? "";
 
   // 수확 버튼
   const harvest = $("#btn-harvest");
@@ -109,6 +138,8 @@ function enterHome() {
 $("#btn-harvest").addEventListener("click", () => {
   const p = state.progress;
   p.statBonus[p.trainingStat] += pendingTrain;
+  // 수확 습관 → 미러 (§8.4): 캡 꽉 채움 = 효율파, 부지런한 수확 = 근성
+  applyBehavior(p.mirror, pendingTrain >= TRAIN_CAP ? "harvestFull" : "harvestDiligent", todayStr());
   p.lastSeen = Date.now();
   pendingTrain = 0;
   saveState(state);
@@ -152,7 +183,10 @@ function startBattle({ free = false, opponent = null } = {}) {
     refreshTickets(p, todayStr());
     if (p.tickets <= 0) return;
     p.tickets -= 1;
+    if (p.tickets === 0) applyBehavior(p.mirror, "allTicketsSpent", todayStr()); // 겁없는 소진 → 저돌 (§8.4)
   }
+  wasSkipped = false;
+  replaying = false;
   const opp = opponent ?? pickOpponent(p.tier, mulberry32(hashString(`opp|${Date.now()}`)));
   const me = buildMyBot(state);
   const seed = hashString(`${me.name}|${opp.name}|${Date.now()}`);
@@ -161,7 +195,14 @@ function startBattle({ free = false, opponent = null } = {}) {
   show("#screen-battle");
   currentBattle = playBattle($("#battle-canvas"), [me, opp], result, (res) => finishLeagueMatch(opp, seed, res));
 }
-$("#btn-skip").addEventListener("click", () => currentBattle?.skip());
+$("#btn-skip").addEventListener("click", () => {
+  if (!replaying) { // 리플레이 스킵은 습관으로 안 친다
+    wasSkipped = true;
+    applyBehavior(state.progress.mirror, "skip", todayStr());
+    saveState(state);
+  }
+  currentBattle?.skip();
+});
 $("#btn-fight").addEventListener("click", () => startBattle());
 
 function finishLeagueMatch(opp, seed, result) {
@@ -169,9 +210,10 @@ function finishLeagueMatch(opp, seed, result) {
   const won = result.winnerIndex === 0;
   p.record[won ? "w" : "l"]++;
   const summary = applyResult(p, won);
+  if (!wasSkipped) applyBehavior(p.mirror, "watch", todayStr()); // 끝까지 관전 → 침착 (§8.4)
   pushHistory(p, {
     seed, won, date: todayStr(),
-    me: { name: state.bot.name, persona: state.bot.persona, statBonus: { ...p.statBonus } },
+    me: { name: state.bot.name, persona: state.bot.persona, statBonus: { ...p.statBonus }, mirrorAxes: { ...p.mirror.axes } },
     opp: { name: opp.name, persona: opp.personaText, boost: opp.stats.power - createBot(opp.name, opp.personaText).stats.power },
   });
   saveState(state);
@@ -244,8 +286,10 @@ function renderHistory() {
 
 function playReplay(h) {
   // 당시 스냅샷 재구성 → 같은 시드 → 완전히 같은 경기 (§7 결정론)
+  replaying = true;
   const me = createBot(h.me.name, h.me.persona);
   for (const k of Object.keys(me.stats)) me.stats[k] = Math.min(STAT_CAP, me.stats[k] + (h.me.statBonus[k] ?? 0));
+  me.axes = effectiveAxes(me.axes, h.me.mirrorAxes); // 당시 미러 성향까지 복원
   const opp = createBot(h.opp.name, h.opp.persona);
   for (const k of Object.keys(opp.stats)) opp.stats[k] += h.opp.boost;
   const result = simulate([me, opp], h.seed);
