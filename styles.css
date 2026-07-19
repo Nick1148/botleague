@@ -90,3 +90,13 @@ input { border: var(--outline) solid var(--ink); border-radius: 14px; padding: 1
 .hist-item .btn-replay { border: 2px solid var(--ink); border-radius: 10px; background: var(--cream-bg);
   font-weight: 700; font-size: 12px; padding: 6px 10px; cursor: pointer; }
 .muted { color: rgba(43,38,34,0.5); font-weight: 600; }
+
+/* ---- 글로벌 랭킹 (§9) ---- */
+.rank-title { margin-top: 10px; font-size: 16px; }
+#global-rank { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.rank-item { display: flex; align-items: center; gap: 8px; border: 2px solid rgba(43,38,34,0.25);
+  border-radius: 10px; background: var(--card); padding: 7px 10px; font-size: 13px; font-weight: 700; }
+.rank-item.me { border-color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.rank-item .rk { width: 26px; color: rgba(43,38,34,0.5); }
+.rank-item .nm { flex: 1; }
+.rank-item .pt { color: var(--coral); }

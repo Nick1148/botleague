@@ -11,6 +11,8 @@ import { TIERS, refreshTickets, applyResult, pickOpponent } from "./league.js";
 import { loadState, saveState, defaultProgress, buildMyBot, pushHistory, STAT_CAP } from "./state.js";
 import { applyBehavior, touchStreak, dominantMirror, effectiveAxes } from "./mirror.js";
 import { dominantStyle } from "./parts.js";
+import { toSnapshot, fromSnapshot } from "./snapshot.js";
+import { upsertMyBot, fetchOpponent, insertMatch, fetchMatch, fetchRanking } from "./net.js";
 
 const $ = (sel) => document.querySelector(sel);
 const EXAMPLES = [
@@ -26,12 +28,13 @@ const BUBBLES = {
   grit: ["오늘도 버틴다.", "어제보다 1만큼 강해졌다.", "훈련 수확 잊지 마라. 내 노력이다."],
 };
 
-let state = null;      // { bot:{name,persona}, progress }
+let state = null;      // { bot:{name,persona}, progress, net:{deviceId,ownerSecret} }
 let currentBattle = null;
 let pendingTrain = 0;
 let homeLoop = null;
 let wasSkipped = false;
 let replaying = false;
+let lastMatchId = null; // 방금 경기의 서버 매치 ID (공유 링크용)
 
 // 미러 상태 말풍선 (§8.4 — 봇이 주인의 습관을 언급한다)
 const MIRROR_BUBBLES = {
@@ -52,6 +55,14 @@ const MIRROR_NOTE = {
 };
 
 const todayStr = () => new Date().toLocaleDateString("sv"); // YYYY-MM-DD (로컬)
+
+function loadStateAfterCreate(name, persona) {
+  return {
+    bot: { name, persona },
+    progress: { ...defaultProgress(), lastSeen: Date.now(), ticketDate: todayStr() },
+    net: { deviceId: crypto.randomUUID(), ownerSecret: crypto.randomUUID() },
+  };
+}
 
 function show(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
@@ -143,6 +154,7 @@ $("#btn-harvest").addEventListener("click", () => {
   p.lastSeen = Date.now();
   pendingTrain = 0;
   saveState(state);
+  upsertMyBot(state); // 성장 반영 동기화
   enterHome();
 });
 
@@ -155,8 +167,9 @@ $("#btn-create").addEventListener("click", () => {
   const name = $("#in-name").value.trim();
   const persona = $("#in-persona").value.trim();
   if (!name || !persona) return alert("이름과 성격을 입력해줘!");
-  state = { bot: { name, persona }, progress: { ...defaultProgress(), lastSeen: Date.now(), ticketDate: todayStr() } };
+  state = loadStateAfterCreate(name, persona);
   saveState(state);
+  upsertMyBot(state); // 리그 명단 등록 (실패 무해 — 다음 접속 때 재시도)
   const myBot = buildMyBot(state);
   const ctx = $("#birth-canvas").getContext("2d");
   const t0 = performance.now();
@@ -177,7 +190,7 @@ $("#btn-debut").addEventListener("click", () => startBattle({ free: true, oppone
 
 /* ---------- 전투 ---------- */
 
-function startBattle({ free = false, opponent = null } = {}) {
+async function startBattle({ free = false, opponent = null } = {}) {
   const p = state.progress;
   if (!free) {
     refreshTickets(p, todayStr());
@@ -187,13 +200,28 @@ function startBattle({ free = false, opponent = null } = {}) {
   }
   wasSkipped = false;
   replaying = false;
-  const opp = opponent ?? pickOpponent(p.tier, mulberry32(hashString(`opp|${Date.now()}`)));
+  // 상대: 온라인 우선 → 실패 시 로컬 NPC 폴백 (§9.1, 콜드스타트 §16)
+  let opp, oppSnap;
+  if (opponent) {
+    opp = opponent;
+    oppSnap = { name: opp.name, persona: opp.personaText, statBonus: {}, mirrorAxes: {} };
+  } else {
+    const row = await fetchOpponent(p.tier, state.net.deviceId);
+    if (row?.name) {
+      oppSnap = { name: row.name, persona: row.persona, statBonus: row.stat_bonus ?? {}, mirrorAxes: row.mirror_axes ?? {} };
+      opp = fromSnapshot(oppSnap);
+    } else {
+      const boost = p.tier * 4;
+      opp = pickOpponent(p.tier, mulberry32(hashString(`opp|${Date.now()}`)));
+      oppSnap = { name: opp.name, persona: opp.personaText, statBonus: { power: boost, tech: boost, speed: boost, mind: boost }, mirrorAxes: {} };
+    }
+  }
   const me = buildMyBot(state);
   const seed = hashString(`${me.name}|${opp.name}|${Date.now()}`);
   const result = simulate([me, opp], seed);
   saveState(state);
   show("#screen-battle");
-  currentBattle = playBattle($("#battle-canvas"), [me, opp], result, (res) => finishLeagueMatch(opp, seed, res));
+  currentBattle = playBattle($("#battle-canvas"), [me, opp], result, (res) => finishLeagueMatch(opp, oppSnap, seed, res));
 }
 $("#btn-skip").addEventListener("click", () => {
   if (!replaying) { // 리플레이 스킵은 습관으로 안 친다
@@ -205,7 +233,7 @@ $("#btn-skip").addEventListener("click", () => {
 });
 $("#btn-fight").addEventListener("click", () => startBattle());
 
-function finishLeagueMatch(opp, seed, result) {
+function finishLeagueMatch(opp, oppSnap, seed, result) {
   const p = state.progress;
   const won = result.winnerIndex === 0;
   p.record[won ? "w" : "l"]++;
@@ -217,8 +245,33 @@ function finishLeagueMatch(opp, seed, result) {
     opp: { name: opp.name, persona: opp.personaText, boost: opp.stats.power - createBot(opp.name, opp.personaText).stats.power },
   });
   saveState(state);
+  // 서버 반영 (실패해도 게임은 계속): 경기 기록(관전 링크) + 내 래더 상태
+  lastMatchId = null;
+  insertMatch(seed, toSnapshot(state), oppSnap, result.winnerIndex).then((id) => {
+    if (id) { lastMatchId = id; updateShareBtn(); }
+  });
+  upsertMyBot(state);
   showInterview(opp, result, summary, `m${seed}`);
 }
+
+function shareUrl() {
+  return `${location.origin}${location.pathname}?watch=${lastMatchId}`;
+}
+function updateShareBtn() {
+  const btn = $("#btn-share");
+  btn.disabled = !lastMatchId;
+  btn.textContent = lastMatchId ? "🔗 공유" : "🔗 업로드 중…";
+}
+$("#btn-share").addEventListener("click", async () => {
+  if (!lastMatchId) return;
+  const url = shareUrl();
+  const text = `${state.bot.name}의 경기를 관전해봐! 성격 한 줄이 진짜로 싸운다`;
+  if (navigator.share) {
+    try { await navigator.share({ title: "AI 파이트 리그", text, url }); return; } catch { /* 취소 시 폴백 */ }
+  }
+  try { await navigator.clipboard.writeText(url); alert("관전 링크가 복사됐어! 붙여넣어서 공유해봐."); }
+  catch { prompt("이 링크를 복사해서 공유해봐:", url); }
+});
 
 /* ---------- 인터뷰 ---------- */
 
@@ -226,6 +279,7 @@ async function showInterview(opp, result, summary, matchKey) {
   const won = result.winnerIndex === 0;
   const me = buildMyBot(state);
   const line = pickInterview(me, { won, comeback: result.comeback }, matchKey);
+  updateShareBtn();
   try { await document.fonts.load('68px "Nanum Pen Script"'); } catch { /* 오프라인 폴백 */ }
   const card = renderCard(me, { won, line, opponentName: opp.name });
   const view = $("#card-canvas");
@@ -260,6 +314,29 @@ function renderLeague() {
     row.innerHTML = `<span class="t-name">${mine ? "🤖 " : ""}${TIERS[i]}</span>` +
       (mine ? `<div class="ladder-progress"><i style="width:${Math.min(100, p.points)}%"></i></div><span class="ladder-note">${note}</span>` : "");
     el.appendChild(row);
+  }
+  renderGlobalRanking();
+}
+
+// 글로벌 랭킹 (§9.2 — 온라인) — 실패 시 안내만
+async function renderGlobalRanking() {
+  const list = $("#global-rank");
+  const data = await fetchRanking(50, state.net.deviceId);
+  if (!data?.top) { list.innerHTML = '<li class="muted">지금은 랭킹을 불러올 수 없어 (오프라인)</li>'; return; }
+  list.innerHTML = "";
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  data.top.forEach((r, i) => {
+    const li = document.createElement("li");
+    li.className = "rank-item" + (r.me ? " me" : "");
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${r.me ? "🤖 " : ""}${esc(r.name)}${r.is_npc ? " <small>(NPC)</small>" : ""}</span>` +
+      `<span>${TIERS[r.tier]?.replace(" 리그", "") ?? ""}</span><span class="pt">${r.points}점</span>`;
+    list.appendChild(li);
+  });
+  if (data.my_rank && !data.top.some((r) => r.me)) {
+    const li = document.createElement("li");
+    li.className = "rank-item me";
+    li.innerHTML = `<span class="rk">${data.my_rank}</span><span class="nm">🤖 ${esc(state.bot.name)} (나)</span><span class="pt">${state.progress.points}점</span>`;
+    list.appendChild(li);
   }
 }
 
@@ -297,11 +374,36 @@ function playReplay(h) {
   currentBattle = playBattle($("#battle-canvas"), [me, opp], result, () => { renderHistory(); show("#screen-history"); });
 }
 
+/* ---------- 관전 모드 (§11.1 공유→유입 퍼널) ---------- */
+
+async function bootWatch(matchId) {
+  const m = await fetchMatch(matchId);
+  history.replaceState(null, "", location.pathname); // 파라미터 제거 (새로고침 시 일반 부팅)
+  if (!m?.snap_a) { normalBoot(); return; }
+  const a = fromSnapshot(m.snap_a);
+  const b = fromSnapshot(m.snap_b);
+  const result = simulate([a, b], Number(m.seed));
+  replaying = true;
+  show("#screen-battle");
+  currentBattle = playBattle($("#battle-canvas"), [a, b], result, () => {
+    // 관전 종료 → CTA: 신규면 생성(60초 퍼널), 기존 유저면 홈
+    if (state) { switchTab("home"); }
+    else {
+      $(".eyebrow").textContent = "방금 경기 봤지? 이번엔 네 차례다 — 60초면 된다";
+      show("#screen-create");
+    }
+  });
+}
+
 /* ---------- 부팅 ---------- */
 
-state = loadState();
-if (state) {
-  switchTab("home");
-} else {
-  show("#screen-create");
+function normalBoot() {
+  if (state) switchTab("home");
+  else show("#screen-create");
 }
+
+state = loadState();
+if (state) upsertMyBot(state); // 접속 시 내 봇 서버 동기화 (실패 무해)
+const watchId = new URLSearchParams(location.search).get("watch");
+if (watchId) bootWatch(watchId);
+else normalBoot();
