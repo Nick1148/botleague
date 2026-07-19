@@ -45,4 +45,14 @@ describe("buildMyBot (§8 — 베이스 + 훈련 보너스)", () => {
     const bot = buildMyBot({ bot: { name: "뭉치", persona: "겁이 많다" }, progress: { ...defaultProgress(), record: { w: 3, l: 1 } } });
     expect(bot.record).toEqual({ w: 3, l: 1 });
   });
+  it("미러가 axes에 반영되지만 파츠·필살기는 base 그대로 (§8.4)", () => {
+    const base = createBot("뭉치", "겁이 많다");
+    const p = defaultProgress();
+    p.mirror.axes = { brave: 15, calm: -15, grit: 15 };
+    const bot = buildMyBot({ bot: { name: "뭉치", persona: "겁이 많다" }, progress: p });
+    expect(bot.axes.brave).toBe(base.axes.brave + 15);
+    expect(bot.axes.honest).toBe(base.axes.honest);   // honest 불변
+    expect(bot.parts).toEqual(base.parts);            // 외형 불변
+    expect(bot.moveName).toBe(base.moveName);         // 필살기 불변
+  });
 });

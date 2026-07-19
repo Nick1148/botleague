@@ -1,5 +1,6 @@
 import { createBot } from "./bot.js";
 import { DAILY_TICKETS } from "./league.js";
+import { defaultMirror, effectiveAxes } from "./mirror.js";
 
 // localStorage 상태 관리 — v2 단일 키. 순수 로직(migrate/buildMyBot)은 스토리지와 분리해 테스트한다.
 const V1_KEY = "botleague.myBot";
@@ -18,7 +19,8 @@ export function defaultProgress() {
     ticketDate: "",
     lastSeen: 0,
     record: { w: 0, l: 0 },
-    history: [],               // { seed, me:{name,persona,statBonus}, opp:{name,persona,boost}, won, date }
+    mirror: defaultMirror(),   // 주인 닮아가기 (§8.4)
+    history: [],               // { seed, me:{name,persona,statBonus,mirrorAxes}, opp:{name,persona,boost}, won, date }
   };
 }
 
@@ -33,12 +35,14 @@ export function migrate({ v1Bot, v2 }) {
   return null;
 }
 
-// 베이스 봇(결정론) + 훈련 보너스 머지 (§8) — 전투·카드에 쓰는 실전 봇
+// 베이스 봇(결정론) + 훈련 보너스 + 미러 성향 머지 (§8, §8.4) — 전투·카드에 쓰는 실전 봇
+// 파츠·필살기·트리거는 createBot(base 축)에서 이미 확정 → 미러는 axes만 물들인다.
 export function buildMyBot(state) {
   const bot = createBot(state.bot.name, state.bot.persona);
   for (const k of Object.keys(bot.stats)) {
     bot.stats[k] = Math.min(STAT_CAP, bot.stats[k] + (state.progress.statBonus[k] ?? 0));
   }
+  bot.axes = effectiveAxes(bot.axes, state.progress.mirror?.axes);
   bot.record = { ...state.progress.record };
   return bot;
 }
