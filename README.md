@@ -16,15 +16,17 @@
 
 ## 배포
 
-정적 사이트 (빌드 불필요). Vercel CLI로 이 폴더를 그대로 올린다:
+**라이브: https://nick1148.github.io/botleague/**
+
+정적 사이트 (빌드 불필요). GitHub Pages(`master` 브랜치 루트)로 배포 — `git push`만 하면 자동 재배포된다.
 
 ```
-npx vercel login     # 최초 1회 (브라우저 인증)
-npx vercel --prod    # botleague/ 에서 실행 → 배포 URL 발급
+git push          # master → Pages 자동 빌드
 ```
 
 백엔드: Supabase `couple-invest` 프로젝트의 `botleague` 격리 스키마 (`db/001_botleague_init.sql`).
 접속 정보는 `src/config.js` (anon 키는 공개 전제 — 보안 경계는 RLS+RPC, §14.5).
+CORS 확인됨: Supabase가 `https://nick1148.github.io` origin 허용.
 
 ## 실행
 
