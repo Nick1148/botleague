@@ -1,0 +1,11 @@
+-- BOTLEAGUE 마이그레이션 사본 (원본은 Supabase couple-invest 프로젝트에 적용됨)
+-- 격리 원칙: 전용 botleague 스키마 + public.bl_* RPC만 노출. RLS on·정책 없음 = 직접 접근 차단.
+-- 분리/이사: pg_dump --schema=botleague 후 public의 bl_* 함수 5종 재생성, 클라이언트 config.js만 교체.
+-- (전체 SQL은 Supabase 마이그레이션 'botleague_init' 참고 — 이 파일은 이사용 기록 사본)
+
+-- 테이블: botleague.bots(device_id unique, owner_secret, name<=10, persona<=60,
+--         stat_bonus jsonb, mirror_axes jsonb, tier 0..4, points, wins, losses, is_npc)
+--         botleague.matches(seed, snap_a jsonb, snap_b jsonb, winner 0|1)
+-- RPC:    bl_upsert_bot(secret 검증 업서트), bl_match_opponent(티어 ±1 랜덤),
+--         bl_insert_match(4KB 스냅샷 제한), bl_get_match, bl_get_ranking(TOP N + my_rank)
+-- 신뢰 모델(MVP): 기기 UUID + owner_secret. 판돈이 낮은 랭킹 전제 — 익명 인증 전환은 Slice 4+.
