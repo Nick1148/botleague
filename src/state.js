@@ -23,9 +23,21 @@ export function defaultProgress() {
     record: { w: 0, l: 0 },
     mirror: defaultMirror(),   // 주인 닮아가기 (§8.4)
     pet: defaultPet(0),        // 반려동물 돌봄 (§8.5)
-    stage: 0,                  // 진화 단계
-    history: [],               // { seed, me:{...,pet조건}, opp:{...}, won, date }
+    stage: 0,                  // 버전(진화) 단계 — 0 프로토타입/1 정식/2 레전드
+    career: null,              // AI 부트캠프 진행 중이면 career 객체 (§22)
+    skills: [],                // 배포된 봇이 보유한 스킬 id (전투 발동)
+    history: [],               // { seed, me:{...,cond,skills}, opp:{...}, won, date }
   };
+}
+
+// 커리어 졸업 → 최종 빌드를 봇에 은행 처리(스탯 캡, 스킬 병합). progress 제자리 수정.
+export function bankCareer(progress, career) {
+  for (const k of Object.keys(progress.statBonus)) {
+    progress.statBonus[k] = Math.min(STAT_CAP, progress.statBonus[k] + (career.statGain[k] ?? 0));
+  }
+  for (const id of career.acquiredSkills) if (!progress.skills.includes(id)) progress.skills.push(id);
+  progress.career = null;
+  return progress;
 }
 
 // 원시 저장값 → 상태 (v1 마이그레이션 포함). uuidFn 주입 가능(테스트용).
@@ -41,6 +53,9 @@ export function migrate({ v1Bot, v2 }, uuidFn = () => crypto.randomUUID()) {
   if (s) {
     if (!s.progress.pet) s.progress.pet = defaultPet(0);
     s.progress.stage = Math.max(s.progress.stage ?? 0, stageForWins(s.progress.record?.w ?? 0));
+    // Slice 5 필드 보충 (기존 유저는 "이미 배포된 봇"으로 취급 → 새 시즌 유도)
+    if (s.progress.career === undefined) s.progress.career = null;
+    if (!s.progress.skills) s.progress.skills = [];
   }
   return s;
 }
@@ -54,6 +69,7 @@ export function buildMyBot(state) {
   }
   bot.axes = effectiveAxes(bot.axes, state.progress.mirror?.axes);
   bot.record = { ...state.progress.record };
+  bot.skills = [...(state.progress.skills ?? [])]; // 배포된 스킬 → 전투 발동 (§7)
   return bot;
 }
 
