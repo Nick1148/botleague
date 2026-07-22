@@ -1,6 +1,8 @@
 import { createBot } from "./bot.js";
 import { DAILY_TICKETS } from "./league.js";
 import { defaultMirror, effectiveAxes } from "./mirror.js";
+import { defaultPet } from "./pet.js";
+import { stageForWins } from "./evolve.js";
 
 // localStorage 상태 관리 — v2 단일 키. 순수 로직(migrate/buildMyBot)은 스토리지와 분리해 테스트한다.
 const V1_KEY = "botleague.myBot";
@@ -20,7 +22,9 @@ export function defaultProgress() {
     lastSeen: 0,
     record: { w: 0, l: 0 },
     mirror: defaultMirror(),   // 주인 닮아가기 (§8.4)
-    history: [],               // { seed, me:{name,persona,statBonus,mirrorAxes}, opp:{name,persona,boost}, won, date }
+    pet: defaultPet(0),        // 반려동물 돌봄 (§8.5)
+    stage: 0,                  // 진화 단계
+    history: [],               // { seed, me:{...,pet조건}, opp:{...}, won, date }
   };
 }
 
@@ -33,6 +37,11 @@ export function migrate({ v1Bot, v2 }, uuidFn = () => crypto.randomUUID()) {
     s = { bot: { name: v1Bot.name, persona: v1Bot.persona }, progress: defaultProgress() };
   }
   if (s && !s.net) s.net = { deviceId: uuidFn(), ownerSecret: uuidFn() }; // 온라인 신원 (§14 MVP 신뢰 모델)
+  // 펫/단계 무손실 보충 (Slice 4 이전 유저): 펫이 없으면 지급, 단계는 승수 기준으로 소급(강등 없음)
+  if (s) {
+    if (!s.progress.pet) s.progress.pet = defaultPet(0);
+    s.progress.stage = Math.max(s.progress.stage ?? 0, stageForWins(s.progress.record?.w ?? 0));
+  }
   return s;
 }
 
