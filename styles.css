@@ -74,6 +74,49 @@ input { border: var(--outline) solid var(--ink); border-radius: 14px; padding: 1
 .care-stat .cbar { height: 12px; background: rgba(43,38,34,0.08); border-radius: 6px; overflow: hidden; }
 .care-stat .cbar > i { display: block; height: 100%; border-radius: 6px; transition: width 0.3s; }
 .condition-line { font-weight: 800; font-size: 14px; text-align: center; padding: 2px 0; }
+
+/* ---- 스타일 뱃지 · 스킬 칩 (§7) ---- */
+.style-badge { display: inline-block; background: var(--ink); color: #fff; font-weight: 800;
+  font-size: 13px; padding: 4px 10px; border-radius: 12px; }
+.skill-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.skill-chip { background: var(--lav); color: #fff; border: 2px solid var(--ink); border-radius: 10px;
+  font-weight: 700; font-size: 12px; padding: 3px 9px; }
+.skill-chip.empty { background: transparent; color: rgba(43,38,34,0.4); border-style: dashed; }
+
+/* ---- AI 부트캠프 (§22) ---- */
+#screen-bootcamp { padding: 12px 16px; gap: 8px; overflow-y: auto; }
+.bc-top { display: flex; justify-content: space-between; align-items: center; font-weight: 800; }
+#bc-title { color: var(--coral); font-size: 15px; }
+#bc-version { background: var(--sun); border: 2px solid var(--ink); border-radius: 10px; padding: 2px 8px; font-size: 12px; }
+.bc-track { display: flex; gap: 4px; align-items: center; }
+.bc-track .node { flex: 1; height: 8px; border-radius: 4px; background: rgba(43,38,34,0.12); }
+.bc-track .node.done { background: var(--mint); }
+.bc-track .node.now { background: var(--coral); box-shadow: 0 0 0 2px var(--ink); }
+.bc-track .node.bench { background: rgba(43,38,34,0.12); position: relative; }
+.bc-track .node.bench::after { content: "⚔"; position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 11px; }
+.bc-bot { position: relative; text-align: center; }
+.bc-bot .style-badge { position: absolute; right: 8px; top: 8px; }
+.gauges { display: flex; flex-direction: column; gap: 5px; }
+.gauge { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; }
+.gbar { height: 14px; background: rgba(43,38,34,0.1); border-radius: 7px; overflow: hidden; }
+.gbar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #FFC93C, #FF6B57); transition: width 0.3s; }
+.motiv { font-size: 16px; color: var(--coral); letter-spacing: 2px; }
+.bc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bc-actions .btn { font-size: 15px; padding: 12px 6px; }
+.bc-actions .btn.full { grid-column: 1 / -1; }
+.bc-actions .train { background: var(--card); }
+.bc-msg { text-align: center; font-weight: 700; font-size: 13px; min-height: 18px; color: var(--coral); }
+
+/* ---- 이벤트 · 배포 ---- */
+.event-card, .deploy-card { margin: auto; width: 88%; background: var(--card); border: var(--outline) solid var(--ink);
+  border-radius: 20px; padding: 22px 18px; box-shadow: 0 6px 0 var(--ink); text-align: center; }
+.ev-text { font-size: 19px; font-weight: 800; line-height: 1.35; margin-bottom: 16px; }
+.ev-choices { display: flex; flex-direction: column; gap: 10px; }
+.deploy-eyebrow { font-weight: 800; color: var(--coral); }
+#deploy-grade { font-size: 44px; margin: 6px 0; }
+.deploy-card canvas { max-width: 60%; }
+#screen-event, #screen-deploy { display: none; align-items: center; }
+#screen-event.active, #screen-deploy.active { display: flex; }
 .more { font-size: 13px; }
 .more summary { font-weight: 700; color: rgba(43,38,34,0.55); cursor: pointer; padding: 4px 0; }
 .more[open] { display: flex; flex-direction: column; gap: 8px; }

@@ -14,8 +14,12 @@ import { dominantStyle } from "./parts.js";
 import { toSnapshot, fromSnapshot } from "./snapshot.js";
 import { upsertMyBot, fetchOpponent, insertMatch, fetchMatch, fetchRanking } from "./net.js";
 import { readSignals, signalMood } from "./signals.js";
-import { decayPet, feed, play, rest, condition, canAct, CARE } from "./pet.js";
+import { decayPet, feed, play, rest as petRest, condition, canAct, CARE } from "./pet.js";
 import { checkEvolve, stageForWins, STAGE_NAMES } from "./evolve.js";
+import { startCareer, train, rest as careerRest, recreate, recordBenchmark, isBenchmarkTurn, MAX_TURNS, BENCHMARK_TURNS } from "./career.js";
+import { STYLE_LABEL, getSkill, rollSkillReward } from "./skills.js";
+import { pickEvent, applyChoice } from "./events.js";
+import { bankCareer } from "./state.js";
 
 const $ = (sel) => document.querySelector(sel);
 const EXAMPLES = [
@@ -151,8 +155,13 @@ function enterHome() {
   }
 
   const fight = $("#btn-fight");
-  fight.textContent = p.tickets > 0 ? `▶ 아레나 출전 (${p.tickets}/5)` : "출전권 소진 — 내일 다시!";
+  fight.textContent = p.tickets > 0 ? `▶ 리그 출전 (${p.tickets}/5)` : "출전권 소진 — 내일 다시!";
   fight.disabled = p.tickets <= 0;
+
+  // 스타일 뱃지 + 배포된 스킬 (§7)
+  const style = STYLE_LABEL[dominantStyle(bot.axes)];
+  $("#home-stage").textContent = `${STAGE_ICON[p.stage]} v${p.stage} · ${style.tag}${style.name}`;
+  renderSkillChips($("#home-skills"), p.skills);
 
   if (homeLoop) cancelAnimationFrame(homeLoop);
   const ctx = $("#home-canvas").getContext("2d");
@@ -206,7 +215,7 @@ function paintCare() {
 document.querySelectorAll(".care-btn").forEach((btn) => btn.addEventListener("click", () => {
   const p = state.progress; const act = btn.dataset.care; const now = Date.now();
   if (!canAct(p.pet, act, now)) return;
-  ({ feed, play, rest })[act](p.pet, now);
+  ({ feed, play, rest: petRest })[act](p.pet, now);
   p.lastSeen = now;
   saveState(state);
   paintCare(); paintMood();
@@ -251,8 +260,175 @@ $("#btn-create").addEventListener("click", () => {
   $("#btn-debut").scrollIntoView({ behavior: "smooth" });
 });
 
-// 데뷔전: 출전권 무료, 리그 포인트는 반영
-$("#btn-debut").addEventListener("click", () => startBattle({ free: true, opponent: randomNpc() }));
+// 데뷔 = AI 부트캠프 시즌 시작 (§22)
+$("#btn-debut").addEventListener("click", () => startSeason());
+
+/* ---------- AI 부트캠프 커리어 (§22) ---------- */
+
+function fightStyleOf(bot) { return dominantStyle(bot.axes); }
+
+// 프리뷰 봇 = 베이스 + 훈련보너스 + 진행 중 커리어 획득분 + 스킬
+function careerBot() {
+  const bot = buildMyBot(state);
+  const c = state.progress.career;
+  if (c) {
+    for (const k of Object.keys(bot.stats)) bot.stats[k] = Math.min(STAT_CAP, bot.stats[k] + (c.statGain[k] ?? 0));
+    bot.skills = [...(state.progress.skills ?? []), ...c.acquiredSkills];
+  }
+  return bot;
+}
+
+function startSeason() {
+  const p = state.progress;
+  if (p.career && !p.career.done) return enterBootcamp(); // 이미 진행 중
+  p.career = startCareer();
+  p.careerSeen = [];
+  saveState(state);
+  $("#birth").hidden = true;
+  enterBootcamp();
+}
+
+let bcLoop = null;
+function enterBootcamp() {
+  const p = state.progress, c = p.career;
+  if (!c) return switchTab("home");
+  if (c.done) return enterDeploy();
+  const bot = careerBot();
+  const style = STYLE_LABEL[fightStyleOf(bot)];
+  $("#bc-version").textContent = `v${p.stage} ${STAGE_NAMES[p.stage]}`;
+  $("#bc-style").textContent = `${style.tag} ${style.name}`;
+  $("#bc-heat").style.width = `${c.heat}%`;
+  $("#bc-motiv").textContent = "●".repeat(c.motivation) + "○".repeat(5 - c.motivation);
+
+  // 진행 트랙
+  const track = $("#bc-track"); track.innerHTML = "";
+  for (let t = 1; t <= MAX_TURNS; t++) {
+    const n = document.createElement("div");
+    n.className = "node" + (t < c.turn ? " done" : "") + (t === c.turn ? " now" : "") + (BENCHMARK_TURNS.includes(t) ? " bench" : "");
+    track.appendChild(n);
+  }
+
+  // 스탯 바 (베이스+획득)
+  const statsEl = $("#bc-stats"); statsEl.innerHTML = "";
+  for (const k of Object.keys(STAT_LABEL)) {
+    const row = document.createElement("div"); row.className = "stat-row";
+    row.innerHTML = `<span>${STAT_LABEL[k]}</span><div class="stat-bar"><i style="width:${(bot.stats[k] / STAT_CAP) * 100}%"></i></div><span>${bot.stats[k]}</span>`;
+    statsEl.appendChild(row);
+  }
+  renderSkillChips($("#bc-skills"), bot.skills);
+
+  // 액션 영역
+  const act = $("#bc-actions"); act.innerHTML = "";
+  if (isBenchmarkTurn(c)) {
+    const idx = BENCHMARK_TURNS.indexOf(c.turn) + 1;
+    const b = mkBtn(`⚔ 평가전 ${idx}/${BENCHMARK_TURNS.length} 도전`, "btn btn-primary full", doBenchmark);
+    act.appendChild(b);
+  } else {
+    for (const k of Object.keys(STAT_LABEL)) act.appendChild(mkBtn(`${STAT_LABEL[k]} 훈련`, "btn train", () => doTrain(k)));
+    act.appendChild(mkBtn("🧊 쿨다운", "btn", doCoolDown));
+    act.appendChild(mkBtn("🎈 기분전환", "btn", doRecreate));
+  }
+
+  if (bcLoop) cancelAnimationFrame(bcLoop);
+  const ctx = $("#bc-canvas").getContext("2d");
+  (function loop(t) {
+    ctx.clearRect(0, 0, 300, 200);
+    drawBot(ctx, bot, { x: 150, y: 110, size: 150, state: "idle", t, stage: p.stage });
+    if ($("#screen-bootcamp").classList.contains("active")) bcLoop = requestAnimationFrame(loop);
+  })(performance.now());
+  show("#screen-bootcamp");
+}
+
+function mkBtn(label, cls, onClick) {
+  const b = document.createElement("button"); b.className = cls; b.textContent = label; b.onclick = onClick; return b;
+}
+function renderSkillChips(el, ids) {
+  el.innerHTML = "";
+  if (!ids || !ids.length) { el.innerHTML = '<span class="skill-chip empty">스킬 없음</span>'; return; }
+  for (const id of ids) { const s = getSkill(id); if (!s) continue; const c = document.createElement("span"); c.className = "skill-chip"; c.textContent = s.name; el.appendChild(c); }
+}
+
+function doTrain(stat) {
+  const r = train(state.progress.career, stat);
+  saveState(state);
+  $("#bc-msg").textContent = r.failed ? `⚠ 오버피팅! ${STAT_LABEL[stat]} 학습 실패…` : `${STAT_LABEL[stat]} +${r.gain} 학습`;
+  afterTurn();
+}
+function doCoolDown() { careerRest(state.progress.career); saveState(state); $("#bc-msg").textContent = "🧊 쿨다운 — 발열 내려감"; afterTurn(); }
+function doRecreate() { recreate(state.progress.career); saveState(state); $("#bc-msg").textContent = "🎈 기분전환 — 동기 올라감"; afterTurn(); }
+
+function afterTurn() {
+  const c = state.progress.career;
+  if (c.done) return enterDeploy();
+  if (!isBenchmarkTurn(c) && Math.random() < 0.33) return showEvent();
+  enterBootcamp();
+}
+
+function showEvent() {
+  const p = state.progress;
+  const ev = pickEvent(mulberry32(hashString("ev" + Date.now())), p.careerSeen ?? []);
+  (p.careerSeen ??= []).push(ev.id);
+  $("#ev-text").textContent = ev.text;
+  const box = $("#ev-choices"); box.innerHTML = "";
+  for (const ch of ev.choices) {
+    box.appendChild(mkBtn(ch.label, "btn", () => {
+      const res = applyChoice(p.career, ch);
+      let msg = res.msg;
+      if (res.skillReward) {
+        const sk = rollSkillReward(fightStyleOf(careerBot()), p.career.acquiredSkills, mulberry32(hashString("sk" + Date.now())));
+        if (sk) { p.career.acquiredSkills.push(sk.id); msg += ` 「${sk.name}」 습득!`; }
+      }
+      saveState(state);
+      $("#bc-msg").textContent = msg;
+      enterBootcamp();
+    }));
+  }
+  show("#screen-event");
+}
+
+function doBenchmark() {
+  const c = state.progress.career;
+  const me = careerBot();
+  const oppTier = Math.min(4, Math.floor((c.turn / MAX_TURNS) * 4) + 1);
+  const opp = pickOpponent(oppTier, mulberry32(hashString(`bench|${me.name}|${c.turn}`)));
+  const cond = { atk: (c.motivation - 3) * 2, def: 0, initiative: (c.motivation - 3) * 2, reasons: [`동기 ${c.motivation}/5`] };
+  const seed = hashString(`${me.name}|bench|${c.turn}|${Date.now()}`);
+  const result = simulate([me, opp], seed, [cond, null]);
+  const idx = BENCHMARK_TURNS.indexOf(c.turn) + 1;
+  const intro = { moodLabel: `평가전 ${idx}/${BENCHMARK_TURNS.length} — 상대 ${opp.name}`, reasons: cond.reasons };
+  replaying = false; wasSkipped = false;
+  show("#screen-battle");
+  currentBattle = playBattle($("#battle-canvas"), [me, opp], result, (res) => {
+    const won = res.winnerIndex === 0;
+    recordBenchmark(c, won);
+    saveState(state);
+    $("#bc-msg").textContent = won ? "✅ 평가전 통과!" : "❌ 평가전 아쉽게 실패…";
+    if (c.done) enterDeploy(); else enterBootcamp();
+  }, { intro, stage: state.progress.stage });
+}
+
+function enterDeploy() {
+  const p = state.progress, c = p.career;
+  const grade = c.grade, gains = { ...c.statGain }, gotSkills = [...c.acquiredSkills];
+  bankCareer(p, c); // p.career = null
+  if (grade && "SAB".includes(grade)) p.stage = Math.min(2, p.stage + 1); // 좋은 등급 → 버전업
+  saveState(state); upsertMyBot(state);
+  const bot = buildMyBot(state);
+  const total = Object.values(gains).reduce((a, b) => a + b, 0);
+  $("#deploy-grade").textContent = `등급 ${grade}`;
+  $("#deploy-summary").textContent = `스탯 +${total} · 스킬 ${gotSkills.length}개 · v${p.stage} ${STAGE_NAMES[p.stage]}`;
+  renderSkillChips($("#deploy-skills"), p.skills);
+  const ctx = $("#deploy-canvas").getContext("2d");
+  const t0 = performance.now();
+  (function loop(t) {
+    ctx.clearRect(0, 0, 300, 220);
+    drawBot(ctx, bot, { x: 150, y: 120, size: 150, state: "win", t: t - t0, stage: p.stage });
+    if ($("#screen-deploy").classList.contains("active")) requestAnimationFrame(loop);
+  })(t0);
+  show("#screen-deploy");
+}
+$("#btn-to-league").addEventListener("click", () => switchTab("home"));
+$("#btn-season").addEventListener("click", () => startSeason());
 
 /* ---------- 전투 ---------- */
 
@@ -505,8 +681,9 @@ async function bootWatch(matchId) {
 /* ---------- 부팅 ---------- */
 
 function normalBoot() {
-  if (state) switchTab("home");
-  else show("#screen-create");
+  if (!state) return show("#screen-create");
+  if (state.progress.career && !state.progress.career.done) return enterBootcamp(); // 진행 중 시즌 이어서
+  switchTab("home");
 }
 
 state = loadState();

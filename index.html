@@ -27,8 +27,42 @@
       <div id="birth" hidden>
         <canvas id="birth-canvas" width="360" height="360"></canvas>
         <p id="birth-desc"></p>
-        <button id="btn-debut" class="btn btn-primary">데뷔전 치르러 가기 ▶</button>
+        <button id="btn-debut" class="btn btn-primary">🎓 AI 부트캠프 시작 ▶</button>
       </div>
+    </div>
+  </section>
+  <section id="screen-bootcamp" class="screen zone-cream">
+    <div class="bc-top">
+      <span id="bc-title">AI 부트캠프</span>
+      <span id="bc-version">v0 프로토타입</span>
+    </div>
+    <div id="bc-track" class="bc-track"></div>
+    <div class="bc-bot"><canvas id="bc-canvas" width="300" height="200"></canvas>
+      <span id="bc-style" class="style-badge">💥 돌격형</span>
+    </div>
+    <div class="gauges">
+      <div class="gauge"><span>🔥 발열</span><div class="gbar"><i id="bc-heat"></i></div></div>
+      <div class="gauge"><span>💗 동기</span><span id="bc-motiv" class="motiv">●●●○○</span></div>
+    </div>
+    <div class="stats" id="bc-stats"></div>
+    <div id="bc-skills" class="skill-chips"></div>
+    <div id="bc-actions" class="bc-actions"></div>
+    <p id="bc-msg" class="bc-msg"></p>
+  </section>
+  <section id="screen-event" class="screen zone-cream">
+    <div class="event-card">
+      <p id="ev-text" class="ev-text"></p>
+      <div id="ev-choices" class="ev-choices"></div>
+    </div>
+  </section>
+  <section id="screen-deploy" class="screen zone-cream">
+    <div class="deploy-card">
+      <p class="deploy-eyebrow">🚀 배포 완료</p>
+      <canvas id="deploy-canvas" width="300" height="220"></canvas>
+      <h2 id="deploy-grade">등급 A</h2>
+      <p id="deploy-summary" class="muted"></p>
+      <div id="deploy-skills" class="skill-chips"></div>
+      <button id="btn-to-league" class="btn btn-primary">리그로 진출 ▶</button>
     </div>
   </section>
   <section id="screen-home" class="screen zone-cream with-tabs">
@@ -44,7 +78,9 @@
     </div>
     <div class="care-stats" id="care-stats"></div>
     <p id="condition-line" class="condition-line">오늘 컨디션: —</p>
-    <button id="btn-fight" class="btn btn-primary">▶ 아레나 출전 (5/5)</button>
+    <div id="home-skills" class="skill-chips"></div>
+    <button id="btn-fight" class="btn btn-primary">▶ 리그 출전 (5/5)</button>
+    <button id="btn-season" class="btn">🎓 새 시즌 (버전업 도전)</button>
     <details class="more"><summary>훈련 · 성향 더보기</summary>
       <button id="btn-harvest" class="btn harvest" hidden>🏋️ 훈련 수확 +0</button>
       <div class="train-row" id="train-row"></div>

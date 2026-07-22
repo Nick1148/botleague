@@ -1,6 +1,7 @@
 import { drawBot } from "./renderer.js";
-import { botPalette } from "./parts.js";
+import { botPalette, dominantStyle } from "./parts.js";
 import { casterLine } from "./caster.js";
+import { STYLE_LABEL } from "./skills.js";
 
 // 이벤트 타임라인 재생 관전 화면 (§19.4-③, §19.5) — v0.4 리치 연출
 // playBattle(canvas, bots, result, onDone, opts) → { skip() }
@@ -78,6 +79,11 @@ export function playBattle(canvas, bots, result, onDone, opts = {}) {
       freezeUntil = now + 500; flash = 1;
       glowUntil[e.actor] = now + 900;
       cutIn = { text: `『${e.label}』`, color: "#FFFFFF", until: now + 1000 };
+    }
+    if (e.type === "skill") { // 스킬 발동 컷인 (§7)
+      freezeUntil = now + 450; flash = 1; glowUntil[e.actor] = now + 900;
+      cutIn = { text: `『${e.label}』`, color: pals[e.actor].neon, until: now + 950 };
+      burst(e.actor, "star", pals[e.actor].neon, 10);
     }
     if (e.type === "round_end" && (hp[0] <= 0 || hp[1] <= 0)) { zoomTarget = 1.14; setTimeout(() => (zoomTarget = 1), 700); } // KO 줌
     if (e.type === "end") {
@@ -223,6 +229,10 @@ export function playBattle(canvas, bots, result, onDone, opts = {}) {
       ctx.fillStyle = "#fff"; ctx.font = "bold 15px Pretendard, sans-serif";
       ctx.textAlign = i === 0 ? "left" : "right";
       ctx.fillText(names[i], i === 0 ? bx : bx + bw, by - 8);
+      // 파이팅 스타일 뱃지 (§7 — "이 봇은 이런 스타일" 가시화)
+      const st = STYLE_LABEL[dominantStyle(bots[i].axes)];
+      ctx.font = "700 11px Pretendard, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillText(`${st.tag}${st.name}`, i === 0 ? bx : bx + bw, by + 26);
     }
     // 캐스터 자막바
     const cy = h * 0.82;
