@@ -4,7 +4,9 @@ import { mulberry32 } from "./rng.js";
 // 상성 구현: 교활(feint)은 공격을 카운터, 신중(guard)은 feint를 봉쇄, 공격은 guard를 뚫는다.
 const TICKS_PER_ROUND = 40;
 
-export function simulate(bots, seed) {
+// conditions(선택): [condA, condB] 각 { atk, def, initiative } — 돌봄·기분의 전투 반영(§8.5).
+// 인자 없으면 기존과 완전히 동일(상성 밸런스 테스트 계약 유지).
+export function simulate(bots, seed, conditions) {
   const rand = mulberry32(seed >>> 0);
   const events = [];
   const roundWins = [0, 0];
@@ -12,12 +14,14 @@ export function simulate(bots, seed) {
   let comeback = false;
   const axesNow = bots.map((b) => ({ ...b.axes }));
   const triggered = [false, false];
+  const cond = (i) => conditions?.[i] ?? null;
 
   events.push({ t: 0, type: "start", actor: -1, hp: [maxHp(bots[0]), maxHp(bots[1])] });
 
   for (let round = 0; roundWins[0] < 2 && roundWins[1] < 2 && round < 3; round++) {
     const hp = [maxHp(bots[0]), maxHp(bots[1])];
-    const energy = [0, 0];
+    // 기력 시작치: 컨디션(선공)이 좋으면 초반부터 유리 (§8.5 "개운해서 선공")
+    const energy = [Math.max(0, (cond(0)?.initiative ?? 0)) * 1.2, Math.max(0, (cond(1)?.initiative ?? 0)) * 1.2];
     const hitStreak = [0, 0]; // 연속 피격 (rage 트리거용)
     const lowHpLogged = [false, false];
     events.push({ t: events.length, type: "round_start", actor: -1, hp: [...hp], label: `R${round + 1}` });
@@ -33,7 +37,7 @@ export function simulate(bots, seed) {
           events.push({ t: events.length, type: "trigger", actor: i, hp: [...hp], label: trig.label });
         }
       }
-      resolveTick(bots, acts, hp, energy, hitStreak, rand, events);
+      resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions);
       for (const i of [0, 1]) {
         if (!lowHpLogged[i] && hp[i] > 0 && hp[i] < maxHp(bots[i]) * 0.12) {
           lowHpLogged[i] = true;
@@ -77,7 +81,7 @@ function chooseAction(bot, axes, energy, rand) {
   return "attack";
 }
 
-function resolveTick(bots, acts, hp, energy, hitStreak, rand, events) {
+function resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions) {
   // 상성 상호작용 → (i가 j에게 주는 데미지 배율, 이벤트 타입)
   for (const i of [0, 1]) {
     const j = 1 - i;
@@ -101,9 +105,12 @@ function resolveTick(bots, acts, hp, energy, hitStreak, rand, events) {
 
     if (mult > 0) {
       if (me === "special") energy[i] = 0;
-      const base = 8 + bots[i].stats.power * 0.8 + rand() * 6;
+      const atkMod = conditions?.[i]?.atk ?? 0;   // 돌봄·기분 공격 보정 (§8.5)
+      const defMod = conditions?.[j]?.def ?? 0;   // 상대 수비 보정
+      const base = 8 + bots[i].stats.power * 0.8 + rand() * 6 + atkMod;
       const crit = rand() < 0.05 + bots[i].stats.tech * 0.006;
-      const dmg = Math.round(base * mult * (crit ? 1.6 : 1));
+      let dmg = Math.round(base * mult * (crit ? 1.6 : 1));
+      dmg = Math.max(1, dmg - Math.max(0, defMod));
       hp[j] = Math.max(0, hp[j] - dmg);
       hitStreak[j]++; hitStreak[i] = 0;
       energy[i] += 15; energy[j] += 10;
