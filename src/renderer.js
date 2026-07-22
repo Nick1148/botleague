@@ -3,17 +3,31 @@ import { mulberry32, hashString } from "./rng.js";
 
 // v0.4 손그림 렌더러 (§19.7) — 지터(보일링) 라인 + 절제된 표정 + stub 팔다리
 // drawBot(ctx, bot, opts)
-// opts: { x, y, size, state:"idle"|"battle"|"win"|"lose"|"interview", t(ms), squash(0..1), flip, glow }
+// opts: { x, y, size, state, t(ms), squash(0..1), flip, glow, stage(0아기/1성체/2완전체) }
 
 const INK = "#33302B";
 const BOIL_MS = 170; // 보일링 라인 리듬 — 낮을수록 부글거림
+const STAGE_SCALE = [0.82, 1, 1.12]; // 진화 단계별 크기 (§8.5)
 
 export function drawBot(ctx, bot, opts) {
-  const { x, y, size, state = "idle", t = 0, squash = 0, flip = false, glow = null } = opts;
+  const { x, y, state = "idle", t = 0, squash = 0, flip = false, glow = null, stage = 1 } = opts;
+  const size = opts.size * (STAGE_SCALE[stage] ?? 1);
   const pal = botPalette(bot);
   const r = size / 2;
   const seedBase = hashString(bot.name + "|" + bot.personaText);
   const boil = seedBase + Math.floor(t / BOIL_MS); // 프레임 지터 시드 (결정론: 이름+시간)
+
+  // 완전체 아우라 (진화 = 눈에 보이는 성장)
+  if (stage >= 2) {
+    ctx.save();
+    const pulse = 0.5 + Math.sin(t / 600) * 0.12;
+    const aura = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 1.35);
+    aura.addColorStop(0, `rgba(255,201,60,${0.18 * pulse})`);
+    aura.addColorStop(1, "rgba(255,201,60,0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath(); ctx.arc(x, y, r * 1.35, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
 
   // 호흡·포즈
   const breathe = state === "battle" ? 0 : Math.sin(t / 520) * 0.035;
