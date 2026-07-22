@@ -1,8 +1,31 @@
 import { mulberry32 } from "./rng.js";
+import { getSkill } from "./skills.js";
 
 // 결정론적 자동전투 (§6.3, §7). 2선승 최대 3라운드, 무승부 없음.
 // 상성 구현: 교활(feint)은 공격을 카운터, 신중(guard)은 feint를 봉쇄, 공격은 guard를 뚫는다.
 const TICKS_PER_ROUND = 40;
+
+// 스킬 발동 판정 (§7 스킬) — 조건 충족 시 1회 발동. bot.skills = [skillId...].
+function fireSkills(bots, hp, energy, hitStreak, skillState, event, events) {
+  for (const i of [0, 1]) {
+    const ids = bots[i].skills;
+    if (!ids || !ids.length) continue;
+    for (const id of ids) {
+      if (skillState[i][id]) continue; // 이미 발동
+      const sk = getSkill(id);
+      if (!sk || sk.fireAt !== event) continue;
+      if (event === "lowhp" && hp[i] >= maxHp(bots[i]) * 0.35) continue;
+      if (event === "streak" && hitStreak[i] < 3) continue;
+      skillState[i][id] = true;
+      const e = sk.effect;
+      if (e.energy) energy[i] += e.energy;
+      if (e.heal) hp[i] = Math.min(maxHp(bots[i]), hp[i] + e.heal);
+      if (e.atk) skillState[i].atk += e.atk; // 누적 공격 보정
+      if (e.def) skillState[i].def += e.def;
+      events.push({ t: events.length, type: "skill", actor: i, hp: [...hp], label: sk.name });
+    }
+  }
+}
 
 // conditions(선택): [condA, condB] 각 { atk, def, initiative } — 돌봄·기분의 전투 반영(§8.5).
 // 인자 없으면 기존과 완전히 동일(상성 밸런스 테스트 계약 유지).
@@ -15,6 +38,7 @@ export function simulate(bots, seed, conditions) {
   const axesNow = bots.map((b) => ({ ...b.axes }));
   const triggered = [false, false];
   const cond = (i) => conditions?.[i] ?? null;
+  const skillState = [{ atk: 0, def: 0 }, { atk: 0, def: 0 }]; // 스킬 누적 보정 + 발동 플래그
 
   events.push({ t: 0, type: "start", actor: -1, hp: [maxHp(bots[0]), maxHp(bots[1])] });
 
@@ -25,6 +49,7 @@ export function simulate(bots, seed, conditions) {
     const hitStreak = [0, 0]; // 연속 피격 (rage 트리거용)
     const lowHpLogged = [false, false];
     events.push({ t: events.length, type: "round_start", actor: -1, hp: [...hp], label: `R${round + 1}` });
+    if (round === 0) fireSkills(bots, hp, energy, hitStreak, skillState, "start", events); // 개시 스킬
 
     for (let tick = 0; tick < TICKS_PER_ROUND && hp[0] > 0 && hp[1] > 0; tick++) {
       const acts = [0, 1].map((i) => chooseAction(bots[i], axesNow[i], energy[i], rand));
@@ -37,7 +62,9 @@ export function simulate(bots, seed, conditions) {
           events.push({ t: events.length, type: "trigger", actor: i, hp: [...hp], label: trig.label });
         }
       }
-      resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions);
+      fireSkills(bots, hp, energy, hitStreak, skillState, "streak", events); // 연타 스킬
+      fireSkills(bots, hp, energy, hitStreak, skillState, "lowhp", events);  // 위기 스킬
+      resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions, skillState);
       for (const i of [0, 1]) {
         if (!lowHpLogged[i] && hp[i] > 0 && hp[i] < maxHp(bots[i]) * 0.12) {
           lowHpLogged[i] = true;
@@ -81,7 +108,7 @@ function chooseAction(bot, axes, energy, rand) {
   return "attack";
 }
 
-function resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions) {
+function resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions, skillState) {
   // 상성 상호작용 → (i가 j에게 주는 데미지 배율, 이벤트 타입)
   for (const i of [0, 1]) {
     const j = 1 - i;
@@ -105,8 +132,8 @@ function resolveTick(bots, acts, hp, energy, hitStreak, rand, events, conditions
 
     if (mult > 0) {
       if (me === "special") energy[i] = 0;
-      const atkMod = conditions?.[i]?.atk ?? 0;   // 돌봄·기분 공격 보정 (§8.5)
-      const defMod = conditions?.[j]?.def ?? 0;   // 상대 수비 보정
+      const atkMod = (conditions?.[i]?.atk ?? 0) + (skillState?.[i]?.atk ?? 0);   // 돌봄·기분(§8.5) + 스킬(§7) 공격 보정
+      const defMod = (conditions?.[j]?.def ?? 0) + (skillState?.[j]?.def ?? 0);   // 상대 수비 보정
       const base = 8 + bots[i].stats.power * 0.8 + rand() * 6 + atkMod;
       const crit = rand() < 0.05 + bots[i].stats.tech * 0.006;
       let dmg = Math.round(base * mult * (crit ? 1.6 : 1));
