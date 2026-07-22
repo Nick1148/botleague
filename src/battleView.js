@@ -3,11 +3,15 @@ import { botPalette } from "./parts.js";
 import { casterLine } from "./caster.js";
 
 // 이벤트 타임라인 재생 관전 화면 (§19.4-③, §19.5) — v0.4 리치 연출
-// playBattle(canvas, bots, result, onDone) → { skip() }
+// playBattle(canvas, bots, result, onDone, opts) → { skip() }
+// opts: { intro:{moodLabel, reasons}, stage } — 전투 전 "오늘 컨디션 카드"(§8.5), 내 펫 진화 단계
 const EVENT_GAP = 550;
 const HIT_STOP = 80, CRIT_STOP = 150;
+const INTRO_MS = 2000;
 
-export function playBattle(canvas, bots, result, onDone) {
+export function playBattle(canvas, bots, result, onDone, opts = {}) {
+  const intro = opts.intro;
+  const myStage = opts.stage ?? 1;
   const ctx = canvas.getContext("2d");
   const W = (canvas.width = canvas.clientWidth * devicePixelRatio);
   const H = (canvas.height = canvas.clientHeight * devicePixelRatio);
@@ -16,7 +20,9 @@ export function playBattle(canvas, bots, result, onDone) {
 
   const names = bots.map((b) => b.name);
   const pals = bots.map((b) => botPalette(b));
-  let idx = 0, nextAt = performance.now() + 800, freezeUntil = 0;
+  const introStart = performance.now();
+  const introUntil = intro ? introStart + INTRO_MS : 0;
+  let idx = 0, nextAt = introStart + (intro ? INTRO_MS + 200 : 800), freezeUntil = 0;
   let shake = 0, caption = casterLine(result.events[0], names) ?? "";
   let hp = [...result.events[0].hp];
   const maxHp = [...result.events[0].hp];
@@ -183,9 +189,30 @@ export function playBattle(canvas, bots, result, onDone) {
         state: done ? (result.winnerIndex === i ? "win" : "lose") : "battle",
         t, squash: squash[i], flip: i === 1,
         glow: now < glowUntil[i] ? pals[i].neon : null,
+        stage: i === 0 ? myStage : 1,
       });
     }
     drawParticles();
+
+    // 오늘의 컨디션 카드 (전투 전 — "준비의 공개", §8.5)
+    if (intro && t < introUntil) {
+      const p = 1 - Math.max(0, (introUntil - t) / INTRO_MS - 0.7) / 0.3; // 페이드 인
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, p < 0 ? 0 : p) * 0.9;
+      ctx.fillStyle = "rgba(10,9,18,0.6)"; ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+      const cw = w * 0.82, cx = w * 0.09, cy = h * 0.3, lines = (intro.reasons || []).slice(0, 3);
+      const ch = h * 0.12 + lines.length * 26 + 20;
+      ctx.fillStyle = "#FFF6E9"; ctx.strokeStyle = "#33302B"; ctx.lineWidth = 3;
+      roundRectPath(ctx, cx, cy, cw, ch, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#33302B"; ctx.textAlign = "center";
+      ctx.font = "bold 20px Pretendard, sans-serif";
+      ctx.fillText("📋 오늘의 컨디션", w / 2, cy + 34);
+      ctx.font = "600 15px Pretendard, sans-serif"; ctx.textAlign = "left";
+      lines.forEach((r, i) => ctx.fillText(r, cx + 22, cy + 68 + i * 26));
+      if (!lines.length) { ctx.textAlign = "center"; ctx.fillText("컨디션 평범 — 실력대로 간다", w / 2, cy + 70); }
+      ctx.restore();
+    }
 
     // HP 바 (네온)
     for (const i of [0, 1]) {

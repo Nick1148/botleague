@@ -32,16 +32,25 @@
     </div>
   </section>
   <section id="screen-home" class="screen zone-cream with-tabs">
-    <div class="home-top"><span id="home-tier">두부 리그</span><span id="home-record">0승 0패</span></div>
+    <div class="home-top"><span id="home-stage">🥚 아기</span><span id="home-tier">두부 리그</span><span id="home-record">0승 0패</span></div>
     <div class="home-bot">
-      <canvas id="home-canvas" width="360" height="320"></canvas>
+      <canvas id="home-canvas" width="360" height="300"></canvas>
       <div id="home-bubble" class="bubble">…</div>
     </div>
-    <button id="btn-harvest" class="btn harvest" hidden>🏋️ 훈련 수확 +0</button>
-    <div class="train-row" id="train-row"></div>
-    <div class="stats" id="home-stats"></div>
-    <p id="mirror-note" class="muted" hidden></p>
-    <button id="btn-fight" class="btn btn-primary">▶ 리그 출전 (5/5)</button>
+    <div class="care-row">
+      <button class="care-btn" data-care="feed"><span class="ico">🍚</span><span class="lbl">밥</span></button>
+      <button class="care-btn" data-care="play"><span class="ico">🎾</span><span class="lbl">놀기</span></button>
+      <button class="care-btn" data-care="rest"><span class="ico">💤</span><span class="lbl">재우기</span></button>
+    </div>
+    <div class="care-stats" id="care-stats"></div>
+    <p id="condition-line" class="condition-line">오늘 컨디션: —</p>
+    <button id="btn-fight" class="btn btn-primary">▶ 아레나 출전 (5/5)</button>
+    <details class="more"><summary>훈련 · 성향 더보기</summary>
+      <button id="btn-harvest" class="btn harvest" hidden>🏋️ 훈련 수확 +0</button>
+      <div class="train-row" id="train-row"></div>
+      <div class="stats" id="home-stats"></div>
+      <p id="mirror-note" class="muted" hidden></p>
+    </details>
   </section>
   <section id="screen-league" class="screen zone-cream with-tabs">
     <h2 class="tab-title">리그</h2>

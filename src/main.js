@@ -13,6 +13,9 @@ import { applyBehavior, touchStreak, dominantMirror, effectiveAxes } from "./mir
 import { dominantStyle } from "./parts.js";
 import { toSnapshot, fromSnapshot } from "./snapshot.js";
 import { upsertMyBot, fetchOpponent, insertMatch, fetchMatch, fetchRanking } from "./net.js";
+import { readSignals, signalMood } from "./signals.js";
+import { decayPet, feed, play, rest, condition, canAct, CARE } from "./pet.js";
+import { checkEvolve, stageForWins, STAGE_NAMES } from "./evolve.js";
 
 const $ = (sel) => document.querySelector(sel);
 const EXAMPLES = [
@@ -21,6 +24,13 @@ const EXAMPLES = [
   "화나면 아무것도 안 보인다", "끝까지 포기 안 하는 잡초",
 ];
 const STAT_LABEL = { power: "근력", tech: "기술", speed: "반응", mind: "멘탈" };
+const STAGE_ICON = ["🥚", "🐣", "✨"];
+const CARE_META = {
+  fullness: { label: "포만", color: "#FFC93C" },
+  energy: { label: "기운", color: "#4DE3FF" },
+  affection: { label: "애정", color: "#FF6B57" },
+};
+let cachedSignals = null; // 배터리 포함 신호 캐시 (async)
 const BUBBLES = {
   brave: ["오늘 상대 누구냐. 빨리.", "몸이 근질거린다.", "훈련? 실전이 훈련이다."],
   caution: ["오늘 승률을 계산해 봤다. 나쁘지 않다.", "서두르지 마라. 나는 준비 중이다.", "관측 완료. 출전 가능."],
@@ -81,34 +91,46 @@ document.querySelectorAll("#tabbar .tab").forEach((b) => b.addEventListener("cli
 
 /* ---------- 홈 (§19.4-①) ---------- */
 
+// 캐시 신호(또는 시간대 폴백)로 기분 계산
+function moodNow() {
+  const now = Date.now();
+  const gap = state.progress.lastSeen ? (now - state.progress.lastSeen) / 3600000 : 0;
+  const s = cachedSignals ?? { hour: new Date(now).getHours(), batteryLevel: null, charging: null };
+  return signalMood({ hour: s.hour, returnGapHours: gap, batteryLevel: s.batteryLevel, charging: s.charging });
+}
+
 function enterHome() {
   const p = state.progress;
+  const now = Date.now();
   refreshTickets(p, todayStr());
-  touchStreak(p.mirror, todayStr()); // 연속 출석 → 근성 드리프트 (§8.4)
-  pendingTrain = accrueTraining(p.lastSeen || Date.now(), Date.now());
+  touchStreak(p.mirror, todayStr());
+  decayPet(p.pet, now - (p.pet.lastDecay || now)); // 자연 감소 (§8.5)
+  p.pet.lastDecay = now;
+  pendingTrain = accrueTraining(p.lastSeen || now, now);
   saveState(state);
 
+  // 배터리 포함 신호 비동기 갱신 → 완료되면 기분/컨디션 다시 그림
+  readSignals(p.lastSeen, now).then((s) => { cachedSignals = s; if ($("#screen-home").classList.contains("active")) paintMood(); });
+
   const bot = buildMyBot(state);
+  p.stage = Math.max(p.stage ?? 0, stageForWins(p.record.w));
+  $("#home-stage").textContent = `${STAGE_ICON[p.stage]} ${STAGE_NAMES[p.stage]}`;
   $("#home-tier").textContent = `${TIERS[p.tier]} · ${p.points}점`;
   $("#home-record").textContent = `${p.record.w}승 ${p.record.l}패`;
 
-  // 말풍선 (성격 톤 + 미러 상태 대사 로테이션)
-  const pool = [...BUBBLES[dominantStyle(bot.axes)]];
+  paintMood();
+  paintCare();
+
+  // 성향 변화 1줄 (더보기 안)
   const dm = dominantMirror(p.mirror.axes);
-  if (dm) pool.push(MIRROR_BUBBLES[dm.axis + dm.dir] ?? "");
-  $("#home-bubble").textContent = pool[Math.floor(Date.now() / 6000) % pool.length] || pool[0];
+  const mnote = $("#mirror-note");
+  mnote.hidden = !dm;
+  if (dm) mnote.textContent = MIRROR_NOTE[dm.axis + dm.dir] ?? "";
 
-  // 성향 변화 1줄
-  const note = $("#mirror-note");
-  note.hidden = !dm;
-  if (dm) note.textContent = MIRROR_NOTE[dm.axis + dm.dir] ?? "";
-
-  // 수확 버튼
   const harvest = $("#btn-harvest");
   harvest.hidden = pendingTrain <= 0;
   harvest.textContent = `🏋️ 훈련 수확 +${pendingTrain} (${STAT_LABEL[p.trainingStat]})`;
 
-  // 훈련 종목 칩
   const row = $("#train-row");
   row.innerHTML = "";
   for (const k of Object.keys(STAT_LABEL)) {
@@ -119,7 +141,6 @@ function enterHome() {
     row.appendChild(chip);
   }
 
-  // 스탯 바
   const statsEl = $("#home-stats");
   statsEl.innerHTML = "";
   for (const k of Object.keys(STAT_LABEL)) {
@@ -129,22 +150,67 @@ function enterHome() {
     statsEl.appendChild(rowEl);
   }
 
-  // 출전 버튼
   const fight = $("#btn-fight");
-  fight.textContent = p.tickets > 0 ? `▶ 리그 출전 (${p.tickets}/5)` : "출전권 소진 — 내일 다시!";
+  fight.textContent = p.tickets > 0 ? `▶ 아레나 출전 (${p.tickets}/5)` : "출전권 소진 — 내일 다시!";
   fight.disabled = p.tickets <= 0;
 
-  // 봇 idle 루프
   if (homeLoop) cancelAnimationFrame(homeLoop);
   const ctx = $("#home-canvas").getContext("2d");
   (function loop(t) {
-    ctx.clearRect(0, 0, 360, 320);
-    drawBot(ctx, bot, { x: 180, y: 170, size: 210, state: "idle", t });
+    ctx.clearRect(0, 0, 360, 300);
+    drawBot(ctx, bot, { x: 180, y: 165, size: 200, state: "idle", t, stage: p.stage });
     if ($("#screen-home").classList.contains("active")) homeLoop = requestAnimationFrame(loop);
   })(performance.now());
 
   show("#screen-home");
 }
+
+// 기분 말풍선 + 오늘 컨디션 요약 (폰 신호가 여기서 드러남 — §8.5/§21)
+function paintMood() {
+  const p = state.progress;
+  const mood = moodNow();
+  const c = condition(p.pet, mood);
+  $("#home-bubble").textContent = mood.label;
+  const netMod = c.atk + c.initiative;
+  const face = netMod > 5 ? "💪 최상" : netMod < -5 ? "🥴 저조" : "😐 보통";
+  $("#condition-line").textContent = `오늘 컨디션: ${face}` + (c.reasons.length ? ` · ${c.reasons[0].replace(/^[^ ]+ /, "")}` : "");
+}
+
+// 돌봄 스탯 바 + 돌보기 버튼 상태
+function paintCare() {
+  const p = state.progress;
+  const el = $("#care-stats");
+  el.innerHTML = "";
+  for (const k of ["fullness", "energy", "affection"]) {
+    const v = Math.round(p.pet[k]);
+    const meta = CARE_META[k];
+    const rowEl = document.createElement("div");
+    rowEl.className = "care-stat";
+    rowEl.innerHTML = `<span>${meta.label[0]}</span><div class="cbar"><i style="width:${v}%;background:${meta.color}"></i></div><span>${v}</span>`;
+    el.appendChild(rowEl);
+  }
+  const now = Date.now();
+  document.querySelectorAll(".care-btn").forEach((btn) => {
+    const act = btn.dataset.care;
+    const ok = canAct(p.pet, act, now);
+    btn.disabled = !ok;
+    const cd = btn.querySelector(".cd") || (() => { const s = document.createElement("span"); s.className = "cd"; btn.appendChild(s); return s; })();
+    if (ok) cd.textContent = "";
+    else {
+      const mins = Math.ceil((CARE[act].cooldownMs - (now - p.pet.last[act])) / 60000);
+      cd.textContent = mins > 60 ? `${Math.ceil(mins / 60)}시간` : `${mins}분`;
+    }
+  });
+}
+
+document.querySelectorAll(".care-btn").forEach((btn) => btn.addEventListener("click", () => {
+  const p = state.progress; const act = btn.dataset.care; const now = Date.now();
+  if (!canAct(p.pet, act, now)) return;
+  ({ feed, play, rest })[act](p.pet, now);
+  p.lastSeen = now;
+  saveState(state);
+  paintCare(); paintMood();
+}));
 
 $("#btn-harvest").addEventListener("click", () => {
   const p = state.progress;
@@ -217,11 +283,16 @@ async function startBattle({ free = false, opponent = null } = {}) {
     }
   }
   const me = buildMyBot(state);
+  // 오늘 컨디션(돌봄+기분) → 전투 반영 (§8.5). 이것이 "준비의 공개".
+  const mood = moodNow();
+  const cond = condition(p.pet, mood);
   const seed = hashString(`${me.name}|${opp.name}|${Date.now()}`);
-  const result = simulate([me, opp], seed);
+  const result = simulate([me, opp], seed, [cond, null]);
   saveState(state);
   show("#screen-battle");
-  currentBattle = playBattle($("#battle-canvas"), [me, opp], result, (res) => finishLeagueMatch(opp, oppSnap, seed, res));
+  const intro = { moodLabel: mood.label, reasons: cond.reasons };
+  currentBattle = playBattle($("#battle-canvas"), [me, opp], result,
+    (res) => finishLeagueMatch(opp, oppSnap, seed, res, cond), { intro, stage: p.stage });
 }
 $("#btn-skip").addEventListener("click", () => {
   if (!replaying) { // 리플레이 스킵은 습관으로 안 친다
@@ -233,25 +304,61 @@ $("#btn-skip").addEventListener("click", () => {
 });
 $("#btn-fight").addEventListener("click", () => startBattle());
 
-function finishLeagueMatch(opp, oppSnap, seed, result) {
+function finishLeagueMatch(opp, oppSnap, seed, result, cond) {
   const p = state.progress;
   const won = result.winnerIndex === 0;
+  const prevWins = p.record.w;
   p.record[won ? "w" : "l"]++;
   const summary = applyResult(p, won);
   if (!wasSkipped) applyBehavior(p.mirror, "watch", todayStr()); // 끝까지 관전 → 침착 (§8.4)
+  const evolvedTo = checkEvolve(prevWins, p.record.w); // 진화 판정 (§8.5)
+  if (evolvedTo != null) p.stage = evolvedTo;
   pushHistory(p, {
     seed, won, date: todayStr(),
-    me: { name: state.bot.name, persona: state.bot.persona, statBonus: { ...p.statBonus }, mirrorAxes: { ...p.mirror.axes } },
+    me: { name: state.bot.name, persona: state.bot.persona, statBonus: { ...p.statBonus }, mirrorAxes: { ...p.mirror.axes }, cond: cond ? { atk: cond.atk, def: cond.def, initiative: cond.initiative } : null },
     opp: { name: opp.name, persona: opp.personaText, boost: opp.stats.power - createBot(opp.name, opp.personaText).stats.power },
   });
   saveState(state);
-  // 서버 반영 (실패해도 게임은 계속): 경기 기록(관전 링크) + 내 래더 상태
   lastMatchId = null;
   insertMatch(seed, toSnapshot(state), oppSnap, result.winnerIndex).then((id) => {
     if (id) { lastMatchId = id; updateShareBtn(); }
   });
   upsertMyBot(state);
-  showInterview(opp, result, summary, `m${seed}`);
+  // 진화했으면 연출 먼저, 아니면 바로 인터뷰
+  if (evolvedTo != null) playEvolve(buildMyBot(state), evolvedTo, () => showInterview(opp, result, summary, `m${seed}`));
+  else showInterview(opp, result, summary, `m${seed}`);
+}
+
+// 진화 연출 — 성장의 공유 순간 (§8.5)
+function playEvolve(bot, newStage, onDone) {
+  const canvas = $("#battle-canvas");
+  const ctx = canvas.getContext("2d");
+  const W = (canvas.width = canvas.clientWidth * devicePixelRatio);
+  const H = (canvas.height = canvas.clientHeight * devicePixelRatio);
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  const w = W / devicePixelRatio, h = H / devicePixelRatio;
+  show("#screen-battle");
+  const t0 = performance.now();
+  (function loop(t) {
+    const e = Math.min(1, (t - t0) / 2600);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#171522"; ctx.fillRect(0, 0, w, h);
+    // 빛 폭발
+    const flash = e < 0.5 ? e * 2 : 1;
+    const g = ctx.createRadialGradient(w / 2, h * 0.45, 10, w / 2, h * 0.45, w * (0.3 + flash * 0.6));
+    g.addColorStop(0, `rgba(255,232,181,${0.5 * (1 - Math.abs(e - 0.5) * 2) + 0.2})`);
+    g.addColorStop(1, "rgba(255,232,181,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const shownStage = e < 0.5 ? newStage - 1 : newStage; // 중간에 바뀜
+    drawBot(ctx, bot, { x: w / 2, y: h * 0.45, size: w * 0.32, state: "win", t, stage: Math.max(0, shownStage) });
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+    ctx.font = `bold ${Math.round(w * 0.09)}px Pretendard, sans-serif`;
+    if (e > 0.55) ctx.fillText("진화!", w / 2, h * 0.72);
+    ctx.font = `bold ${Math.round(w * 0.055)}px Pretendard, sans-serif`;
+    if (e > 0.62) ctx.fillText(`${bot.name} → ${STAGE_NAMES[newStage]}`, w / 2, h * 0.78);
+    if (e < 1) requestAnimationFrame(loop);
+    else setTimeout(onDone, 700);
+  })(t0);
 }
 
 function shareUrl() {
@@ -362,14 +469,14 @@ function renderHistory() {
 }
 
 function playReplay(h) {
-  // 당시 스냅샷 재구성 → 같은 시드 → 완전히 같은 경기 (§7 결정론)
+  // 당시 스냅샷 재구성 → 같은 시드 + 당시 컨디션 → 완전히 같은 경기 (§7 결정론)
   replaying = true;
   const me = createBot(h.me.name, h.me.persona);
   for (const k of Object.keys(me.stats)) me.stats[k] = Math.min(STAT_CAP, me.stats[k] + (h.me.statBonus[k] ?? 0));
   me.axes = effectiveAxes(me.axes, h.me.mirrorAxes); // 당시 미러 성향까지 복원
   const opp = createBot(h.opp.name, h.opp.persona);
   for (const k of Object.keys(opp.stats)) opp.stats[k] += h.opp.boost;
-  const result = simulate([me, opp], h.seed);
+  const result = simulate([me, opp], h.seed, [h.me.cond ?? null, null]);
   show("#screen-battle");
   currentBattle = playBattle($("#battle-canvas"), [me, opp], result, () => { renderHistory(); show("#screen-history"); });
 }

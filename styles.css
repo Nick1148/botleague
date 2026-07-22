@@ -53,10 +53,30 @@ input { border: var(--outline) solid var(--ink); border-radius: 14px; padding: 1
 
 /* ---- 홈 (§19.4-①: 봇이 주인공) ---- */
 #screen-home { padding: 14px 18px; gap: 8px; overflow-y: auto; }
-.home-top { display: flex; justify-content: space-between; font-weight: 800; font-size: 14px; }
+.home-top { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 13px; gap: 6px; }
+#home-stage { background: var(--sun); border: 2px solid var(--ink); border-radius: 10px; padding: 3px 8px; }
 #home-tier { color: var(--coral); }
 .home-bot { position: relative; text-align: center; }
-#home-canvas { max-width: 78%; }
+#home-canvas { max-width: 72%; }
+
+/* ---- 돌보기 (§8.5 — 돌봄이 준비다) ---- */
+.care-row { display: flex; gap: 8px; }
+.care-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: var(--outline) solid var(--ink); border-radius: 16px; background: var(--card);
+  padding: 8px 2px; cursor: pointer; box-shadow: 0 3px 0 var(--ink); transition: transform 0.08s; }
+.care-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.care-btn:disabled { opacity: 0.45; box-shadow: none; cursor: default; }
+.care-btn .ico { font-size: 24px; }
+.care-btn .lbl { font-size: 12px; font-weight: 800; }
+.care-btn .cd { font-size: 10px; font-weight: 700; color: rgba(43,38,34,0.55); }
+.care-stats { display: flex; flex-direction: column; gap: 5px; }
+.care-stat { display: grid; grid-template-columns: 20px 1fr 34px; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.care-stat .cbar { height: 12px; background: rgba(43,38,34,0.08); border-radius: 6px; overflow: hidden; }
+.care-stat .cbar > i { display: block; height: 100%; border-radius: 6px; transition: width 0.3s; }
+.condition-line { font-weight: 800; font-size: 14px; text-align: center; padding: 2px 0; }
+.more { font-size: 13px; }
+.more summary { font-weight: 700; color: rgba(43,38,34,0.55); cursor: pointer; padding: 4px 0; }
+.more[open] { display: flex; flex-direction: column; gap: 8px; }
 .bubble { position: absolute; top: 4px; right: 2px; max-width: 45%; background: var(--card);
   border: var(--outline) solid var(--ink); border-radius: 14px; padding: 8px 10px;
   font-family: "Nanum Pen Script", Pretendard, sans-serif; font-size: 17px; line-height: 1.25; text-align: left; }
