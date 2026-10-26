@@ -53,11 +53,15 @@ export function renderCard(bot, { won, line, opponentName }) {
 
 export function saveCard(canvas, filename) {
   canvas.toBlob((blob) => {
+    if (!blob) return;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = filename;
+    a.download = filename.replace(/[\\/:*?"<>|]/g, "_"); // 파일명에 못 쓰는 문자 정리
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    a.remove();
+    // 즉시 revoke 하면 사파리/파이어폭스에서 다운로드가 취소됨 → 지연 해제
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }, "image/png");
 }
 

@@ -3,11 +3,12 @@ import { DAILY_TICKETS } from "./league.js";
 import { defaultMirror, effectiveAxes } from "./mirror.js";
 import { defaultPet } from "./pet.js";
 import { stageForWins } from "./evolve.js";
+import { STAT_CAP_VALUE } from "./limits.js";
 
 // localStorage 상태 관리 — v2 단일 키. 순수 로직(migrate/buildMyBot)은 스토리지와 분리해 테스트한다.
 const V1_KEY = "botleague.myBot";
 const V2_KEY = "botleague.state.v2";
-export const STAT_CAP = 40; // §8.2 레벨 캡 (종목당)
+export const STAT_CAP = STAT_CAP_VALUE; // §8.2 레벨 캡 (종목당)
 const HISTORY_MAX = 20;
 
 export function defaultProgress() {
@@ -19,7 +20,8 @@ export function defaultProgress() {
     points: 0,
     tickets: DAILY_TICKETS,
     ticketDate: "",
-    lastSeen: 0,
+    lastSeen: 0,               // 마지막 방문 시각 (복귀 갭 → 기분 신호용)
+    trainSince: 0,             // 방치 훈련 적립 기준 시각 (수확 시에만 이동 — 돌봄/방문으로 리셋되지 않음)
     record: { w: 0, l: 0 },
     mirror: defaultMirror(),   // 주인 닮아가기 (§8.4)
     pet: defaultPet(0),        // 반려동물 돌봄 (§8.5)
@@ -40,17 +42,40 @@ export function bankCareer(progress, career) {
   return progress;
 }
 
+// crypto.randomUUID 는 보안 컨텍스트(https/localhost)에서만 존재 → LAN IP 등 http 접속용 폴백 (RFC4122 v4)
+export function randomUUID() {
+  const c = globalThis.crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  const b = new Uint8Array(16);
+  if (c?.getRandomValues) c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+
 // 원시 저장값 → 상태 (v1 마이그레이션 포함). uuidFn 주입 가능(테스트용).
-export function migrate({ v1Bot, v2 }, uuidFn = () => crypto.randomUUID()) {
+export function migrate({ v1Bot, v2 }, uuidFn = randomUUID) {
   let s = null;
   if (v2 && v2.bot) {
     s = { bot: v2.bot, progress: { ...defaultProgress(), ...(v2.progress ?? {}) }, net: v2.net };
   } else if (v1Bot && v1Bot.name) {
     s = { bot: { name: v1Bot.name, persona: v1Bot.persona }, progress: defaultProgress() };
   }
-  if (s && !s.net) s.net = { deviceId: uuidFn(), ownerSecret: uuidFn() }; // 온라인 신원 (§14 MVP 신뢰 모델)
+  if (s && !(s.net?.deviceId && s.net?.ownerSecret)) s.net = { deviceId: uuidFn(), ownerSecret: uuidFn() }; // 온라인 신원 (§14 MVP 신뢰 모델)
   // 펫/단계 무손실 보충 (Slice 4 이전 유저): 펫이 없으면 지급, 단계는 승수 기준으로 소급(강등 없음)
   if (s) {
+    // 손상/부분 저장값 방어: 중첩 객체가 깨져 있으면 기본값으로 (홈 진입 시 크래시 방지)
+    const d = defaultProgress();
+    for (const k of ["statBonus", "record", "mirror"]) {
+      if (!isObj(s.progress[k])) s.progress[k] = d[k];
+    }
+    s.progress.statBonus = { ...d.statBonus, ...s.progress.statBonus };
+    s.progress.record = { ...d.record, ...s.progress.record };
+    if (!Array.isArray(s.progress.history)) s.progress.history = [];
+    if (!s.progress.trainSince) s.progress.trainSince = s.progress.lastSeen || 0; // 기존 유저: lastSeen 이 훈련 기준이었음
     if (!s.progress.pet) s.progress.pet = defaultPet(0);
     s.progress.stage = Math.max(s.progress.stage ?? 0, stageForWins(s.progress.record?.w ?? 0));
     // Slice 5 필드 보충 (기존 유저는 "이미 배포된 봇"으로 취급 → 새 시즌 유도)
@@ -80,13 +105,21 @@ export function pushHistory(progress, entry) {
 
 /* ---------- 브라우저 스토리지 바인딩 ---------- */
 
-export function loadState(storage = globalThis.localStorage) {
+// 사파리 사생활 보호 모드·스토리지 차단 시 localStorage 접근 자체가 throw → 앱이 하얀 화면이 되지 않게 방어
+function defaultStorage() {
+  try { return globalThis.localStorage ?? null; } catch { return null; }
+}
+
+export function loadState(storage = defaultStorage()) {
   let v1Bot = null, v2 = null;
+  if (!storage) return null;
   try { v1Bot = JSON.parse(storage.getItem(V1_KEY) ?? "null"); } catch { /* 무시 */ }
   try { v2 = JSON.parse(storage.getItem(V2_KEY) ?? "null"); } catch { /* 무시 */ }
   return migrate({ v1Bot, v2 });
 }
 
-export function saveState(state, storage = globalThis.localStorage) {
-  storage.setItem(V2_KEY, JSON.stringify(state));
+// 저장 실패(용량 초과·차단)는 false 반환 — 게임 진행은 멈추지 않는다 (이번 세션 메모리 상태로 계속)
+export function saveState(state, storage = defaultStorage()) {
+  if (!storage) return false;
+  try { storage.setItem(V2_KEY, JSON.stringify(state)); return true; } catch { return false; }
 }

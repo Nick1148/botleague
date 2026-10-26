@@ -32,6 +32,11 @@ export function playBattle(canvas, bots, result, onDone, opts = {}) {
   let flash = 0, zoom = 1, zoomTarget = 1, done = false, skipped = false;
   let cutIn = null; // { text, color, until } — 필살기/트리거 컷인
   const particles = [];
+  // onDone은 정확히 한 번만 — 스킵 연타/종료 타이머와 스킵 경합 시 전적이 두 번 기록되던 문제 방지
+  let finished = false;
+  const finish = () => { if (finished) return; finished = true; onDone(result); };
+  const announce = opts.onCaption ?? (() => {}); // 스크린리더용 자막 전달 (캔버스는 읽히지 않음)
+  announce(caption);
 
   const botPos = (i) => ({ x: w * (i === 0 ? 0.3 : 0.7), y: h * 0.56 });
 
@@ -59,7 +64,7 @@ export function playBattle(canvas, bots, result, onDone, opts = {}) {
   function step(e) {
     hp = [...e.hp];
     const line = casterLine(e, names);
-    if (line) caption = line;
+    if (line && line !== caption) { caption = line; announce(caption); }
     const now = performance.now();
     if (e.type === "hit" || e.type === "feint_hit" || e.type === "guard") {
       freezeUntil = now + HIT_STOP; shake = 5; squash[1 - e.actor] = 1;
@@ -88,7 +93,7 @@ export function playBattle(canvas, bots, result, onDone, opts = {}) {
     if (e.type === "round_end" && (hp[0] <= 0 || hp[1] <= 0)) { zoomTarget = 1.14; setTimeout(() => (zoomTarget = 1), 700); } // KO 줌
     if (e.type === "end") {
       done = true; zoomTarget = 1.1; confetti();
-      setTimeout(() => { if (!skipped) onDone(result); }, 1700);
+      setTimeout(() => { if (!skipped) finish(); }, 1700);
     }
   }
 
@@ -262,7 +267,10 @@ export function playBattle(canvas, bots, result, onDone, opts = {}) {
   }
   requestAnimationFrame(frame);
 
-  return { skip() { skipped = true; onDone(result); } };
+  return {
+    skip() { if (finished) return; skipped = true; finish(); },
+    get finished() { return finished; },
+  };
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {

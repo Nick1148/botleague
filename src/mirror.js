@@ -1,6 +1,8 @@
 // 주인 닮아가기 (§8.4) — 유저의 플레이 습관이 봇 성향에 서서히 스며든다.
 // 원칙: 성격 한 줄이 주인공(보정 ±15), 하루 ±2, honest 축 제외, 미접속 무페널티, 결정론(명시적 수치 저장).
-export const MIRROR_CAP = 15;
+import { MIRROR_CAP_VALUE } from "./limits.js";
+
+export const MIRROR_CAP = MIRROR_CAP_VALUE;
 export const DAILY_CAP = 2;
 const DRIFT_AXES = ["brave", "calm", "grit"];
 

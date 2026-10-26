@@ -22,3 +22,17 @@ describe("accrueTraining (§8.2 방치 훈련)", () => {
     expect(TRAIN_CAP).toBe(16);
   });
 });
+
+import { nextTrainSince } from "../src/training.js";
+describe("nextTrainSince (수확 후 적립 기준)", () => {
+  const MIN = 60000;
+  it("자투리 진행분 보존: 75분 경과 → 2점 수확, 15분은 다음 적립으로", () => {
+    expect(nextTrainSince(0 + 1, 1 + 75 * MIN)).toBe(1 + 60 * MIN);
+  });
+  it("캡 도달 시 now부터 다시", () => {
+    expect(nextTrainSince(1, 1 + 20 * 60 * MIN)).toBe(1 + 20 * 60 * MIN);
+  });
+  it("기준이 미래(시계 변경)면 now", () => {
+    expect(nextTrainSince(5000, 1000)).toBe(1000);
+  });
+});

@@ -33,3 +33,13 @@ describe("snapshot 왕복 (관전 링크 무결성의 핵심)", () => {
     expect(bot.parts).toBeTruthy();
   });
 });
+
+describe("snapshot 스킬·변조 방어", () => {
+  it("스킬이 왕복되고 모르는 스킬 id는 버린다", () => {
+    const bot = fromSnapshot({ name: "a", persona: "b", skills: ["overclock", "hack!!", "overclock"] });
+    expect(bot.skills).toEqual(["overclock"]);
+  });
+  it("persona 가 null 인 서버 행도 크래시 없이 처리", () => {
+    expect(() => fromSnapshot({ name: "x", persona: null, stat_bonus: { power: "lol" } })).not.toThrow();
+  });
+});

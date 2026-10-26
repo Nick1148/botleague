@@ -56,3 +56,24 @@ describe("buildMyBot (§8 — 베이스 + 훈련 보너스)", () => {
     expect(bot.moveName).toBe(base.moveName);         // 필살기 불변
   });
 });
+
+import { loadState as _load, saveState as _save, randomUUID, migrate as _migrate } from "../src/state.js";
+describe("스토리지 장애·손상 데이터 방어", () => {
+  it("setItem 이 throw 해도 saveState 는 false 반환", () => {
+    const bad = { setItem() { throw new Error("QuotaExceeded"); }, getItem() { return null; } };
+    expect(_save({ a: 1 }, bad)).toBe(false);
+  });
+  it("스토리지 없음 → loadState null", () => {
+    expect(_load(null)).toBe(null);
+  });
+  it("randomUUID 는 v4 형식", () => {
+    expect(randomUUID()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+  it("깨진 중첩 필드는 기본값으로 보충, trainSince 는 lastSeen 에서 이관", () => {
+    const s = _migrate({ v2: { bot: { name: "a", persona: "b" }, progress: { statBonus: null, record: "x", history: 3, lastSeen: 1234 }, net: { deviceId: "d", ownerSecret: "s" } } });
+    expect(s.progress.statBonus.power).toBe(0);
+    expect(s.progress.record).toEqual({ w: 0, l: 0 });
+    expect(s.progress.history).toEqual([]);
+    expect(s.progress.trainSince).toBe(1234);
+  });
+});

@@ -3,31 +3,48 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>AI 파이트 리그 (가칭)</title>
+<title>AI 파이트 리그 — 성격 한 줄로 만든 AI가 싸운다</title>
+<meta name="description" content="성격 한 줄로 나만의 AI 봇을 만들고, AI 부트캠프에서 키워 리그에 내보내는 육성 자동전투 게임. 설치 없이 브라우저에서 바로 플레이.">
+<meta name="theme-color" content="#FFF6E9">
+<link rel="canonical" href="https://nick1148.github.io/botleague/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="AI 파이트 리그">
+<meta property="og:title" content="AI 파이트 리그 — 성격 한 줄이 싸운다">
+<meta property="og:description" content="성격 한 줄로 AI 봇을 만들고 키워서 리그에 내보내자. 60초면 데뷔.">
+<meta property="og:url" content="https://nick1148.github.io/botleague/">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<!-- 정적 호스팅(GitHub Pages)은 응답 헤더를 못 바꾸므로 meta CSP로 스크립트 출처를 자기 자신으로 제한 (XSS 피해 축소) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://pumxcqgjzlfqspqagmfj.supabase.co; base-uri 'self'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- 폰트: Pretendard(SIL OFL), 나눔손글씨 펜(SIL OFL) — 오프라인 시 시스템 폰트 폴백 (§20.2) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<noscript><p style="padding:24px;font-weight:700">AI 파이트 리그는 자바스크립트가 필요해요. 브라우저 설정에서 자바스크립트를 켜 주세요.</p></noscript>
 <main id="stage">
   <section id="screen-create" class="screen zone-cream active">
     <div class="create-inner">
       <p class="eyebrow">AI만 들어갈 수 있는 리그</p>
       <h1>봇을 만들어<br>내보내자</h1>
-      <label>이름<input id="in-name" maxlength="10" placeholder="예: 뭉치"></label>
-      <label>성격 한 줄 (이 문장이 싸운다)
-        <div class="persona-row">
-          <input id="in-persona" maxlength="60" placeholder="예: 겁이 많지만 돈이 걸리면 목숨을 건다">
-          <button id="btn-dice" class="btn" type="button" title="예시 굴리기">🎲</button>
-        </div>
-      </label>
-      <button id="btn-create" class="btn btn-primary">탄생시키기</button>
+      <label for="in-name">이름</label>
+      <input id="in-name" maxlength="10" placeholder="예: 뭉치" autocomplete="off" enterkeyhint="next" aria-describedby="create-err">
+      <label for="in-persona">성격 한 줄 (이 문장이 싸운다)</label>
+      <div class="persona-row">
+        <input id="in-persona" maxlength="60" placeholder="예: 겁이 많지만 돈이 걸리면 목숨을 건다" autocomplete="off" enterkeyhint="done" aria-describedby="create-err">
+        <button id="btn-dice" class="btn" type="button" title="예시 굴리기" aria-label="성격 예시 굴리기">🎲</button>
+      </div>
+      <p id="create-err" class="form-err" role="alert" hidden></p>
+      <button id="btn-create" class="btn btn-primary" type="button">탄생시키기</button>
       <div id="birth" hidden>
-        <canvas id="birth-canvas" width="360" height="360"></canvas>
-        <p id="birth-desc"></p>
-        <button id="btn-debut" class="btn btn-primary">🎓 AI 부트캠프 시작 ▶</button>
+        <canvas id="birth-canvas" width="360" height="360" role="img" aria-label="새로 태어난 봇"></canvas>
+        <p id="birth-desc" aria-live="polite"></p>
+        <button id="btn-debut" class="btn btn-primary" type="button">🎓 AI 부트캠프 시작 ▶</button>
       </div>
     </div>
   </section>
@@ -36,53 +53,53 @@
       <span id="bc-title">AI 부트캠프</span>
       <span id="bc-version">v0 프로토타입</span>
     </div>
-    <div id="bc-track" class="bc-track"></div>
-    <div class="bc-bot"><canvas id="bc-canvas" width="300" height="200"></canvas>
+    <div id="bc-track" class="bc-track" role="img" aria-label="진행 트랙"></div>
+    <div class="bc-bot"><canvas id="bc-canvas" width="300" height="200" role="img" aria-label="훈련 중인 내 봇"></canvas>
       <span id="bc-style" class="style-badge">💥 돌격형</span>
     </div>
     <div class="gauges">
-      <div class="gauge"><span>🔥 발열</span><div class="gbar"><i id="bc-heat"></i></div></div>
+      <div class="gauge"><span id="lbl-heat">🔥 발열</span><div class="gbar" role="meter" aria-labelledby="lbl-heat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="bc-heat"></i></div></div>
       <div class="gauge"><span>💗 동기</span><span id="bc-motiv" class="motiv">●●●○○</span></div>
     </div>
     <div class="stats" id="bc-stats"></div>
     <div id="bc-skills" class="skill-chips"></div>
     <div id="bc-actions" class="bc-actions"></div>
-    <p id="bc-msg" class="bc-msg"></p>
+    <p id="bc-msg" class="bc-msg" aria-live="polite"></p>
   </section>
   <section id="screen-event" class="screen zone-cream">
     <div class="event-card">
-      <p id="ev-text" class="ev-text"></p>
+      <h2 id="ev-text" class="ev-text"></h2>
       <div id="ev-choices" class="ev-choices"></div>
     </div>
   </section>
   <section id="screen-deploy" class="screen zone-cream">
     <div class="deploy-card">
       <p class="deploy-eyebrow">🚀 배포 완료</p>
-      <canvas id="deploy-canvas" width="300" height="220"></canvas>
+      <canvas id="deploy-canvas" width="300" height="220" role="img" aria-label="배포된 내 봇"></canvas>
       <h2 id="deploy-grade">등급 A</h2>
       <p id="deploy-summary" class="muted"></p>
       <div id="deploy-skills" class="skill-chips"></div>
-      <button id="btn-to-league" class="btn btn-primary">리그로 진출 ▶</button>
+      <button type="button" id="btn-to-league" class="btn btn-primary">리그로 진출 ▶</button>
     </div>
   </section>
   <section id="screen-home" class="screen zone-cream with-tabs">
     <div class="home-top"><span id="home-stage">🥚 아기</span><span id="home-tier">두부 리그</span><span id="home-record">0승 0패</span></div>
     <div class="home-bot">
-      <canvas id="home-canvas" width="360" height="300"></canvas>
-      <div id="home-bubble" class="bubble">…</div>
+      <canvas id="home-canvas" width="360" height="300" role="img" aria-label="내 봇"></canvas>
+      <div id="home-bubble" class="bubble" aria-live="polite">…</div>
     </div>
     <div class="care-row">
-      <button class="care-btn" data-care="feed"><span class="ico">🍚</span><span class="lbl">밥</span></button>
-      <button class="care-btn" data-care="play"><span class="ico">🎾</span><span class="lbl">놀기</span></button>
-      <button class="care-btn" data-care="rest"><span class="ico">💤</span><span class="lbl">재우기</span></button>
+      <button class="care-btn" type="button" data-care="feed" aria-label="밥 주기"><span class="ico" aria-hidden="true">🍚</span><span class="lbl">밥</span></button>
+      <button class="care-btn" type="button" data-care="play" aria-label="놀아주기"><span class="ico" aria-hidden="true">🎾</span><span class="lbl">놀기</span></button>
+      <button class="care-btn" type="button" data-care="rest" aria-label="재우기"><span class="ico" aria-hidden="true">💤</span><span class="lbl">재우기</span></button>
     </div>
     <div class="care-stats" id="care-stats"></div>
-    <p id="condition-line" class="condition-line">오늘 컨디션: —</p>
+    <p id="condition-line" class="condition-line" aria-live="polite">오늘 컨디션: —</p>
     <div id="home-skills" class="skill-chips"></div>
-    <button id="btn-fight" class="btn btn-primary">▶ 리그 출전 (5/5)</button>
-    <button id="btn-season" class="btn">🎓 새 시즌 (버전업 도전)</button>
+    <button type="button" id="btn-fight" class="btn btn-primary">▶ 리그 출전 (5/5)</button>
+    <button type="button" id="btn-season" class="btn">🎓 새 시즌 (버전업 도전)</button>
     <details class="more"><summary>훈련 · 성향 더보기</summary>
-      <button id="btn-harvest" class="btn harvest" hidden>🏋️ 훈련 수확 +0</button>
+      <button type="button" id="btn-harvest" class="btn harvest" hidden>🏋️ 훈련 수확 +0</button>
       <div class="train-row" id="train-row"></div>
       <div class="stats" id="home-stats"></div>
       <p id="mirror-note" class="muted" hidden></p>
@@ -91,8 +108,8 @@
   <section id="screen-league" class="screen zone-cream with-tabs">
     <h2 class="tab-title">리그</h2>
     <div id="ladder"></div>
-    <h3 class="rank-title">🌏 글로벌 랭킹 TOP 50</h3>
-    <ul id="global-rank"><li class="muted">불러오는 중…</li></ul>
+    <h3 class="rank-title" id="rank-title">🌏 글로벌 랭킹 TOP 50</h3>
+    <ul id="global-rank" aria-labelledby="rank-title" aria-busy="false"><li class="muted">불러오는 중…</li></ul>
   </section>
   <section id="screen-history" class="screen zone-cream with-tabs">
     <h2 class="tab-title">기록</h2>
@@ -100,23 +117,24 @@
     <p id="history-empty" class="muted">아직 경기 기록이 없어. 리그에 출전해보자!</p>
   </section>
   <section id="screen-battle" class="screen zone-dark">
-    <canvas id="battle-canvas"></canvas>
-    <button id="btn-skip" class="btn skip">스킵 ≫</button>
+    <canvas id="battle-canvas" role="img" aria-label="경기 화면"></canvas>
+    <p id="battle-live" class="sr-only" aria-live="polite"></p>
+    <button id="btn-skip" class="btn skip" type="button" aria-label="경기 스킵">스킵 ≫</button>
   </section>
   <section id="screen-interview" class="screen zone-cream">
     <p id="promo-note" class="promo" hidden></p>
-    <div class="card-wrap"><canvas id="card-canvas"></canvas></div>
+    <div class="card-wrap"><canvas id="card-canvas" role="img" aria-label="인터뷰 카드"></canvas></div>
     <div class="interview-actions">
-      <button id="btn-save" class="btn btn-primary">📸 저장</button>
-      <button id="btn-share" class="btn">🔗 공유</button>
-      <button id="btn-again" class="btn">한 판 더</button>
-      <button id="btn-home" class="btn">홈</button>
+      <button type="button" id="btn-save" class="btn btn-primary">📸 저장</button>
+      <button type="button" id="btn-share" class="btn">🔗 공유</button>
+      <button type="button" id="btn-again" class="btn">한 판 더</button>
+      <button type="button" id="btn-home" class="btn">홈</button>
     </div>
   </section>
-  <nav id="tabbar" hidden>
-    <button class="tab active" data-tab="home">🏠 홈</button>
-    <button class="tab" data-tab="league">🏆 리그</button>
-    <button class="tab" data-tab="history">📼 기록</button>
+  <nav id="tabbar" aria-label="주요 메뉴" hidden>
+    <button class="tab active" type="button" data-tab="home" aria-current="page">🏠 홈</button>
+    <button class="tab" type="button" data-tab="league">🏆 리그</button>
+    <button class="tab" type="button" data-tab="history">📼 기록</button>
   </nav>
 </main>
 <script type="module" src="src/main.js"></script>

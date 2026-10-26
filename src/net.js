@@ -1,12 +1,13 @@
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
+import { cleanStatBonus, cleanMirrorAxes } from "./validate.js";
 
 // 온라인 레이어 (§14) — RPC만 호출, 실패는 전부 null 반환 → 호출부가 로컬 NPC 모드로 폴백.
 // 오프라인이어도 게임은 절대 멈추지 않는다 (§10.2 "게임은 LLM 없이도 완결"과 같은 원칙).
 
 async function rpc(fn, args, timeoutMs = 4000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
       method: "POST",
       headers: {
@@ -17,12 +18,13 @@ async function rpc(fn, args, timeoutMs = 4000) {
       body: JSON.stringify(args),
       signal: ctrl.signal,
     });
-    clearTimeout(timer);
     if (!res.ok) return null;
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer); // 실패 경로에서도 타이머 정리
   }
 }
 
@@ -33,8 +35,9 @@ export function upsertMyBot(state) {
     p_secret: state.net.ownerSecret,
     p_name: state.bot.name,
     p_persona: state.bot.persona,
-    p_stat_bonus: p.statBonus,
-    p_mirror: p.mirror.axes,
+    // 범위 정리 후 전송 (구버전에서 캡 없이 쌓인 보너스 등 — 서버 검증 db/002 적용 시에도 거부되지 않게)
+    p_stat_bonus: cleanStatBonus(p.statBonus),
+    p_mirror: cleanMirrorAxes(p.mirror.axes),
     p_tier: p.tier,
     p_points: p.points,
     p_wins: p.record.w,

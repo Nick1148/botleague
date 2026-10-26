@@ -165,3 +165,41 @@ input { border: var(--outline) solid var(--ink); border-radius: 14px; padding: 1
 .rank-item .rk { width: 26px; color: rgba(43,38,34,0.5); }
 .rank-item .nm { flex: 1; }
 .rank-item .pt { color: var(--coral); }
+
+/* ---- 접근성 · 모바일 보강 ---- */
+/* 스크린리더 전용 텍스트 (전투 자막 라이브 영역) */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* 키보드 포커스가 보이지 않던 문제 */
+:focus-visible { outline: 3px solid var(--lav); outline-offset: 2px; }
+input:focus-visible { outline-offset: 0; }
+.form-err { color: #B3261E; font-weight: 700; font-size: 14px; margin-top: -6px; }
+#screen-create label { margin-bottom: -8px; }
+.btn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: 0 1px 0 var(--ink); }
+/* 밝은 배경 위 회색 글자 대비 4.5:1 미달 → 진하게 (WCAG AA) */
+.muted { color: rgba(43,38,34,0.68); }
+#tabbar .tab { color: rgba(43,38,34,0.68); }
+.more summary { color: rgba(43,38,34,0.68); }
+.care-btn .cd { color: rgba(43,38,34,0.72); }
+.ladder-note { color: rgba(43,38,34,0.72); }
+.rank-item .rk { color: rgba(43,38,34,0.68); }
+/* 탭 버튼 터치 영역 44px 이상 */
+#tabbar .tab { min-height: 44px; }
+/* 좁은 화면(≤390px): 줄바꿈·넘침 방지 */
+@media (max-width: 390px) {
+  .home-top { flex-wrap: wrap; font-size: 12px; }
+  .interview-actions { gap: 6px; padding-left: 12px; padding-right: 12px; }
+  .interview-actions .btn { font-size: 14px; padding: 12px 4px; }
+  h1 { font-size: 30px; }
+  .bubble { font-size: 16px; max-width: 48%; }
+}
+.rank-item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-item .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 움직임 줄이기 설정 존중 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
+}
+/* 평가전 ⚔ 표식이 위쪽 버전 뱃지와 겹치던 문제 (390px 확인) */
+.bc-track { margin-top: 14px; }
+.skill-chip.empty { color: rgba(43,38,34,0.62); }
+.ladder-row .t-name { white-space: nowrap; }
